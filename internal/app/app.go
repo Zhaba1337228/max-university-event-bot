@@ -10,8 +10,10 @@ import (
 
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/fsm"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/external/gigachat"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/repo"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/scheduler"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/transport/adminapi"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/transport/longpoll"
@@ -41,6 +43,7 @@ type App struct {
 	longpoll   *longpoll.Runner
 	webhook    *webhook.Server
 	adminAPI   *adminapi.Server
+	scheduler  *scheduler.Scheduler
 
 	updates chan schemes.UpdateInterface
 }
@@ -119,6 +122,35 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	qrSvc := service.NewQR()
 	attendSvc := service.NewAttendance(pool, qrSvc, regsRepo, eventsRepo, usersRepo, roleSvc, logsRepo)
 
+	// Day 16: GigaChat (опционально). Если AuthKey не задан — фасад деградирует
+	// в ErrAIUnavailable, и handler уйдёт в fallback.
+	var aiSvc service.AI
+	if cfg.GigaChat.AuthKey != "" {
+		giga := gigachat.New(gigachat.Config{
+			AuthKey:     cfg.GigaChat.AuthKey,
+			Scope:       cfg.GigaChat.Scope,
+			Model:       cfg.GigaChat.Model,
+			OAuthURL:    cfg.GigaChat.OAuthURL,
+			APIURL:      cfg.GigaChat.APIURL,
+			Timeout:     cfg.GigaChat.Timeout,
+			InsecureTLS: cfg.GigaChat.InsecureTLS,
+			MaxTokens:   cfg.AI.MaxTokens,
+		})
+		aiSvc = service.NewAI(giga, service.AIConfig{
+			RecommenderEnabled: cfg.AI.RecommenderEnabled,
+			RewriterEnabled:    cfg.AI.RewriterEnabled,
+			SummaryEnabled:     cfg.AI.SummaryEnabled,
+			RequestTimeout:     cfg.AI.RequestTimeout,
+		}, log)
+		log.Info("ai enabled",
+			"recommender", cfg.AI.RecommenderEnabled,
+			"rewriter", cfg.AI.RewriterEnabled,
+			"summary", cfg.AI.SummaryEnabled,
+		)
+	} else {
+		log.Info("ai disabled (GIGACHAT_AUTH_KEY empty)")
+	}
+
 	// 6. Handlers + Dispatcher + Long-poll runner
 	handlers := bot.NewHandlers(bot.HandlersConfig{
 		API:             mc,
@@ -132,6 +164,7 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 		Notification:    notifSvc,
 		Auth:            authSvc,
 		QR:              qrSvc,
+		AI:              aiSvc,
 		RegsRepo:        regsRepo,
 		DB:              pool,
 		WaitlistEnabled: cfg.Business.WaitlistEnabled,
@@ -175,6 +208,17 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 		}, log, a.updates)
 	}
 
+	// Day 16: scheduler — reminders + dispatch + purge.
+	sched, err := scheduler.New(scheduler.Config{
+		ReminderHoursCSV: cfg.Business.ReminderHoursCSV,
+	}, log,
+		notifsRepo, eventsRepo, regsRepo, usersRepo, statesRepo, pool, mc)
+	if err != nil {
+		a.closeQuietly()
+		return nil, fmt.Errorf("scheduler: %w", err)
+	}
+	a.scheduler = sched
+
 	return a, nil
 }
 
@@ -184,6 +228,13 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 func (a *App) Run(ctx context.Context) error {
 	// Dispatcher всегда нужен — обрабатывает входящие апдейты.
 	go a.dispatcher.Run(ctx, a.updates)
+
+	// Day 16: scheduler — reminders + dispatch + purge.
+	if a.scheduler != nil {
+		if err := a.scheduler.Start(); err != nil {
+			return fmt.Errorf("scheduler start: %w", err)
+		}
+	}
 
 	// Admin REST API (опционален; запускается только при ADMIN_SESSION_KEY).
 	apiErrCh := make(chan error, 1)
@@ -224,6 +275,10 @@ func (a *App) Run(ctx context.Context) error {
 
 // Shutdown освобождает ресурсы. Безопасно вызывать многократно.
 func (a *App) Shutdown() {
+	if a.scheduler != nil {
+		a.scheduler.Stop()
+		a.scheduler = nil
+	}
 	a.closeQuietly()
 }
 

@@ -26,18 +26,21 @@ type OrganizerHandler struct {
 	fsm    *fsm.Manager
 	role   service.Role
 	events service.Event
+	ai     service.AI // опционально (для org:ai_summary)
 	log    *slog.Logger
 }
 
-// NewOrganizerHandler — конструктор.
+// NewOrganizerHandler — конструктор. ai может быть nil — в этом случае
+// org:ai_summary вернёт «AI недоступен».
 func NewOrganizerHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
-	role service.Role, events service.Event, log *slog.Logger,
+	role service.Role, events service.Event, ai service.AI, log *slog.Logger,
 ) *OrganizerHandler {
 	return &OrganizerHandler{
 		api:    api,
 		fsm:    fsmMgr,
 		role:   role,
 		events: events,
+		ai:     ai,
 		log:    log.With("handler", "organizer"),
 	}
 }
@@ -65,10 +68,8 @@ func (h *OrganizerHandler) OnCallback(ctx context.Context, upd *schemes.MessageC
 		eventID := p.ArgInt64(0)
 		h.showStats(ctx, chatID, userMaxID, eventID)
 	case "ai_summary":
-		// День 16.
-		if err := h.api.SendText(ctx, chatID, "AI-сводка появится в следующих обновлениях."); err != nil {
-			h.log.Error("send ai placeholder failed", "err", err)
-		}
+		eventID := p.ArgInt64(0)
+		h.showAISummary(ctx, chatID, userMaxID, eventID)
 	default:
 		h.log.Debug("unknown org action", "action", p.Action)
 		if err := h.api.SendTextWithKeyboard(ctx, chatID,
@@ -142,6 +143,59 @@ func (h *OrganizerHandler) showStats(ctx context.Context, chatID, userMaxID, eve
 	kb := keyboards.OrganizerEventActions(eventID, ev.Status)
 	if err := h.api.SendTextWithKeyboard(ctx, chatID, text, kb); err != nil {
 		h.log.Error("send organizer stats failed", "err", err)
+	}
+}
+
+// showAISummary — AI-сводка по событию.
+// Если AI недоступен — graceful fallback в обычную текстовую статистику.
+func (h *OrganizerHandler) showAISummary(ctx context.Context, chatID, userMaxID, eventID int64) {
+	if _, err := h.role.RequireEventOwner(ctx, userMaxID, eventID); err != nil {
+		h.handleAccessErr(ctx, chatID, err)
+		return
+	}
+	ev, err := h.events.Get(ctx, eventID)
+	if err != nil || ev == nil {
+		h.handleAccessErr(ctx, chatID, service.ErrEventNotFound)
+		return
+	}
+	stats, err := h.events.Stats(ctx, eventID)
+	if err != nil {
+		h.sendError(ctx, chatID)
+		return
+	}
+
+	if h.ai == nil {
+		h.sendText(ctx, chatID, messages.AIUnavailable())
+		// показываем обычную статистику как fallback
+		text := messages.OrganizerStats(ev, stats)
+		if err := h.api.SendTextWithKeyboard(ctx, chatID, text,
+			keyboards.OrganizerEventActions(eventID, ev.Status)); err != nil {
+			h.log.Error("send fallback stats failed", "err", err)
+		}
+		return
+	}
+
+	summary, err := h.ai.OrganizerSummary(ctx, ev, stats)
+	if errors.Is(err, service.ErrAIUnavailable) || err != nil {
+		h.sendText(ctx, chatID, messages.AIUnavailable())
+		text := messages.OrganizerStats(ev, stats)
+		if err := h.api.SendTextWithKeyboard(ctx, chatID, text,
+			keyboards.OrganizerEventActions(eventID, ev.Status)); err != nil {
+			h.log.Error("send fallback stats failed", "err", err)
+		}
+		return
+	}
+
+	text := "AI-сводка по «" + ev.Title + "»:\n\n" + summary
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, text,
+		keyboards.OrganizerEventActions(eventID, ev.Status)); err != nil {
+		h.log.Error("send ai summary failed", "err", err)
+	}
+}
+
+func (h *OrganizerHandler) sendText(ctx context.Context, chatID int64, text string) {
+	if err := h.api.SendText(ctx, chatID, text); err != nil {
+		h.log.Error("send text failed", "err", err)
 	}
 }
 

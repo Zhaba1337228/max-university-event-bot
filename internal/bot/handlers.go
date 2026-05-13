@@ -36,6 +36,7 @@ type Handlers struct {
 	OrganizerList *handlers.OrganizerListHandler
 	OrgNotify     *handlers.OrganizerNotifyHandler
 	AdminLogin    *handlers.AdminLoginHandler
+	AIPick        *handlers.AIPickHandler
 }
 
 // HandlersConfig — групповая инициализация. По мере роста зависимостей удобнее
@@ -52,6 +53,7 @@ type HandlersConfig struct {
 	Notification    service.Notification
 	Auth            service.Auth
 	QR              service.QR
+	AI              service.AI
 	RegsRepo        repo.RegistrationRepo
 	DB              repo.Querier
 	WaitlistEnabled bool
@@ -77,11 +79,12 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 	h.Cancel = handlers.NewCancelHandler(cfg.API, cfg.FSM,
 		cfg.Registration, cfg.Users, cfg.Events, cfg.Log)
 	h.Waitlist = handlers.NewWaitlistHandler(cfg.API, cfg.FSM, h.Registration, cfg.Log)
-	h.Organizer = handlers.NewOrganizerHandler(cfg.API, cfg.FSM, cfg.Role, cfg.Events, cfg.Log)
+	h.Organizer = handlers.NewOrganizerHandler(cfg.API, cfg.FSM, cfg.Role, cfg.Events, cfg.AI, cfg.Log)
 	h.OrganizerList = handlers.NewOrganizerListHandler(cfg.API, cfg.FSM, cfg.Role,
 		cfg.Events, cfg.RegsRepo, cfg.DB, cfg.Log)
 	h.OrgNotify = handlers.NewOrganizerNotifyHandler(cfg.API, cfg.FSM, cfg.Role,
-		cfg.Events, cfg.Notification, cfg.RegsRepo, cfg.DB, cfg.Log)
+		cfg.Events, cfg.Notification, cfg.AI, cfg.RegsRepo, cfg.DB, cfg.Log)
+	h.AIPick = handlers.NewAIPickHandler(cfg.API, cfg.FSM, cfg.AI, cfg.Events, cfg.Log)
 	if cfg.Auth != nil {
 		h.AdminLogin = handlers.NewAdminLoginHandler(cfg.API, cfg.Auth, cfg.WebBaseURL, cfg.Log)
 	}
@@ -132,6 +135,12 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 		h.Registration.OnText(ctx, upd, snap)
 	case fsm.StateOrganizerNotifText:
 		h.OrgNotify.OnText(ctx, upd, snap)
+	case fsm.StateAIPickIntent:
+		if h.AIPick != nil {
+			h.AIPick.OnText(ctx, upd, snap)
+		} else {
+			h.Fallback.OnText(ctx, upd)
+		}
 	default:
 		h.Fallback.OnText(ctx, upd)
 	}
@@ -162,8 +171,14 @@ func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallba
 		h.OrganizerList.OnCallback(ctx, upd, p)
 	case callbacks.GroupOrgNotif:
 		h.OrgNotify.OnCallback(ctx, upd, p)
+	case callbacks.GroupAI:
+		if h.AIPick != nil {
+			h.AIPick.OnCallback(ctx, upd, p)
+		} else {
+			h.Fallback.OnCallback(ctx, upd, p)
+		}
 	default:
-		// Будущее: orgclose/admin/ai
+		// Будущее: orgclose/admin
 		h.Fallback.OnCallback(ctx, upd, p)
 	}
 }

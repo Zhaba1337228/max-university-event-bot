@@ -32,14 +32,16 @@ type OrganizerNotifyHandler struct {
 	role   service.Role
 	events service.Event
 	notif  service.Notification
+	ai     service.AI // опционально (для orgnotif:ai)
 	regs   repo.RegistrationRepo
 	q      repo.Querier
 	log    *slog.Logger
 }
 
-// NewOrganizerNotifyHandler — конструктор.
+// NewOrganizerNotifyHandler — конструктор. ai может быть nil — в этом случае
+// orgnotif:ai вернёт «AI недоступен», текст рассылки не меняется.
 func NewOrganizerNotifyHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
-	role service.Role, events service.Event, notif service.Notification,
+	role service.Role, events service.Event, notif service.Notification, ai service.AI,
 	regs repo.RegistrationRepo, q repo.Querier, log *slog.Logger,
 ) *OrganizerNotifyHandler {
 	return &OrganizerNotifyHandler{
@@ -48,6 +50,7 @@ func NewOrganizerNotifyHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
 		role:   role,
 		events: events,
 		notif:  notif,
+		ai:     ai,
 		regs:   regs,
 		q:      q,
 		log:    log.With("handler", "organizer_notify"),
@@ -72,8 +75,7 @@ func (h *OrganizerNotifyHandler) OnCallback(ctx context.Context, upd *schemes.Me
 	case "cancel":
 		h.onCancel(ctx, chatID, userMaxID)
 	case "ai":
-		// День 16.
-		h.sendText(ctx, chatID, "AI-улучшение появится в следующих обновлениях.")
+		h.onAIRewrite(ctx, chatID, userMaxID)
 	default:
 		h.log.Debug("unknown orgnotif action", "action", p.Action)
 		h.sendFallback(ctx, chatID)
@@ -173,6 +175,48 @@ func (h *OrganizerNotifyHandler) onCancel(ctx context.Context, chatID, userMaxID
 	if err := h.api.SendTextWithKeyboard(ctx, chatID,
 		messages.OrganizerNotifCancelled(), keyboards.MainMenu()); err != nil {
 		h.log.Error("send cancel notif failed", "err", err)
+	}
+}
+
+// onAIRewrite — улучшение текста рассылки через GigaChat.
+// На fallback (AI недоступен / парсинг JSON упал) — оставляем оригинальный
+// текст, показываем preview снова + сообщение «AI недоступен».
+func (h *OrganizerNotifyHandler) onAIRewrite(ctx context.Context, chatID, userMaxID int64) {
+	snap, err := h.fsm.Load(ctx, userMaxID)
+	if err != nil || snap.State != fsm.StateOrganizerNotifConfirm || snap.Context.OrganizerEventID == 0 {
+		h.sendFallback(ctx, chatID)
+		return
+	}
+	if h.ai == nil {
+		h.sendText(ctx, chatID, messages.AIUnavailable())
+		return
+	}
+
+	draft := snap.Context.NotificationFinal
+	if draft == "" {
+		draft = snap.Context.NotificationDraft
+	}
+
+	ev, err := h.events.Get(ctx, snap.Context.OrganizerEventID)
+	if err != nil || ev == nil {
+		h.sendError(ctx, chatID)
+		return
+	}
+
+	improved, err := h.ai.RewriteNotification(ctx, draft, ev)
+	if err != nil {
+		h.sendText(ctx, chatID, messages.AIUnavailable())
+		return
+	}
+
+	// Сохраняем улучшенный текст и показываем новый preview.
+	snap.Context.NotificationFinal = improved
+	_ = h.fsm.Save(ctx, userMaxID, fsm.StateOrganizerNotifConfirm, snap.Context)
+
+	count, _ := h.regs.CountByEvent(ctx, h.q, snap.Context.OrganizerEventID, domain.RegStatusRegistered)
+	preview := "Текст улучшен через ИИ:\n\n" + messages.OrganizerNotifPreview(improved, count)
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, preview, keyboards.OrganizerNotifConfirm()); err != nil {
+		h.log.Error("send ai preview failed", "err", err)
 	}
 }
 
