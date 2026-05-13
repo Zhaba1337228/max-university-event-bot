@@ -60,6 +60,7 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	regsRepo := repo.NewRegistrations()
 	usersRepo := repo.NewUsers()
 	logsRepo := repo.NewActionLogs()
+	notifsRepo := repo.NewNotifications()
 
 	// 3. FSM
 	fsmMgr := fsm.NewManager(statesRepo, pool)
@@ -69,6 +70,14 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	userSvc := service.NewUser(pool, usersRepo, logsRepo)
 	regSvc := service.NewRegistration(pool, eventsRepo, regsRepo, usersRepo, logsRepo,
 		cfg.Business.WaitlistEnabled)
+	actionLogSvc := service.NewActionLog(pool, logsRepo)
+	roleSvc := service.NewRole(pool, usersRepo, eventsRepo, log)
+
+	// Bootstrap ролей из env (organizer/admin user IDs).
+	if err := roleSvc.Bootstrap(ctx,
+		cfg.Business.OrganizerUserIDs, cfg.Business.AdminUserIDs); err != nil {
+		log.Warn("role bootstrap failed (continuing without)", "err", err)
+	}
 
 	// 5. MAX client + ping
 	mc, err := maxclient.New(maxclient.Config{
@@ -93,6 +102,10 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 		"username", botInfo.Username,
 	)
 
+	// Notification service зависит от mc — конструируем после Ping.
+	notifSvc := service.NewNotification(pool, notifsRepo, regsRepo, eventsRepo,
+		usersRepo, logsRepo, mc, cfg.Business.NotifyRateLimitRPS, cfg.Business.NotifyBatchSize, log)
+
 	// 6. Handlers + Dispatcher + Long-poll runner
 	handlers := bot.NewHandlers(bot.HandlersConfig{
 		API:             mc,
@@ -101,6 +114,11 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 		Events:          eventSvc,
 		Users:           userSvc,
 		Registration:    regSvc,
+		ActionLogs:      actionLogSvc,
+		Role:            roleSvc,
+		Notification:    notifSvc,
+		RegsRepo:        regsRepo,
+		DB:              pool,
 		WaitlistEnabled: cfg.Business.WaitlistEnabled,
 		PolicyVersion:   cfg.Policy.PrivacyPolicyVersion,
 	})

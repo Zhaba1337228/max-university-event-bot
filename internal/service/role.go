@@ -1,0 +1,120 @@
+package service
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/repo"
+)
+
+// Role — сервис проверок ролей пользователей.
+//
+// На MVP роль присваивается через env-bootstrap (ORGANIZER_USER_IDS,
+// ADMIN_USER_IDS). На дне 10 dynamic-promote делает admin через бот
+// или веб-админку (день 13).
+type Role interface {
+	// Bootstrap проставляет роль admin/organizer пользователям, чьи
+	// max_user_id указаны в config.Business.OrganizerUserIDs / AdminUserIDs.
+	// Безопасно вызывать многократно — операция идемпотентна (EnsureByMaxID).
+	Bootstrap(ctx context.Context, organizerMaxIDs, adminMaxIDs []int64) error
+
+	// RequireOrganizer — false если у пользователя роль applicant
+	// (admin тоже считается organizer'ом).
+	RequireOrganizer(ctx context.Context, maxUserID int64) (*domain.User, error)
+
+	// RequireEventOwner — пользователь должен быть admin или создателем события.
+	// Это первая строка каждого организаторского handler'а (см. план §19.4).
+	RequireEventOwner(ctx context.Context, maxUserID, eventID int64) (*domain.User, error)
+}
+
+type roleService struct {
+	pool   repo.Querier
+	users  repo.UserRepo
+	events repo.EventRepo
+	log    *slog.Logger
+}
+
+// NewRole создаёт сервис.
+func NewRole(pool repo.Querier, users repo.UserRepo, events repo.EventRepo, log *slog.Logger) Role {
+	return &roleService{
+		pool:   pool,
+		users:  users,
+		events: events,
+		log:    log.With("service", "role"),
+	}
+}
+
+func (s *roleService) Bootstrap(ctx context.Context, organizerMaxIDs, adminMaxIDs []int64) error {
+	// Admin'ам — admin (он включает organizer-привилегии).
+	for _, mid := range adminMaxIDs {
+		if mid == 0 {
+			continue
+		}
+		u, err := s.users.EnsureByMaxID(ctx, s.pool, mid)
+		if err != nil {
+			return fmt.Errorf("ensure admin %d: %w", mid, err)
+		}
+		if u.Role == domain.RoleAdmin {
+			continue
+		}
+		if err := s.users.SetRole(ctx, s.pool, u.ID, domain.RoleAdmin); err != nil {
+			return fmt.Errorf("set admin %d: %w", mid, err)
+		}
+		s.log.Info("role bootstrapped", "max_user_id", mid, "role", domain.RoleAdmin)
+	}
+
+	// Organizer'ам — organizer.
+	for _, mid := range organizerMaxIDs {
+		if mid == 0 {
+			continue
+		}
+		u, err := s.users.EnsureByMaxID(ctx, s.pool, mid)
+		if err != nil {
+			return fmt.Errorf("ensure organizer %d: %w", mid, err)
+		}
+		// Не «понижаем» admin до organizer'а, если он уже admin.
+		if u.Role == domain.RoleAdmin || u.Role == domain.RoleOrganizer {
+			continue
+		}
+		if err := s.users.SetRole(ctx, s.pool, u.ID, domain.RoleOrganizer); err != nil {
+			return fmt.Errorf("set organizer %d: %w", mid, err)
+		}
+		s.log.Info("role bootstrapped", "max_user_id", mid, "role", domain.RoleOrganizer)
+	}
+	return nil
+}
+
+func (s *roleService) RequireOrganizer(ctx context.Context, maxUserID int64) (*domain.User, error) {
+	u, err := s.users.GetByMaxID(ctx, s.pool, maxUserID)
+	if err != nil {
+		return nil, fmt.Errorf("lookup user: %w", err)
+	}
+	if u == nil || !u.IsOrganizer() {
+		return nil, ErrNotOrganizer
+	}
+	return u, nil
+}
+
+func (s *roleService) RequireEventOwner(ctx context.Context, maxUserID, eventID int64) (*domain.User, error) {
+	u, err := s.RequireOrganizer(ctx, maxUserID)
+	if err != nil {
+		return nil, err
+	}
+	// Admin может всё.
+	if u.IsAdmin() {
+		return u, nil
+	}
+	ev, err := s.events.Get(ctx, s.pool, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if ev == nil {
+		return nil, ErrEventNotFound
+	}
+	if ev.CreatedBy == nil || *ev.CreatedBy != u.ID {
+		return nil, ErrNotEventOwner
+	}
+	return u, nil
+}

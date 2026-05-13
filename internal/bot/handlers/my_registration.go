@@ -22,12 +22,14 @@ type MyRegistrationHandler struct {
 	users  service.User
 	reg    service.Registration
 	events service.Event
+	logs   service.ActionLog
 	log    *slog.Logger
 }
 
 // NewMyRegistrationHandler — конструктор.
 func NewMyRegistrationHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
-	users service.User, reg service.Registration, events service.Event, log *slog.Logger,
+	users service.User, reg service.Registration, events service.Event,
+	logs service.ActionLog, log *slog.Logger,
 ) *MyRegistrationHandler {
 	return &MyRegistrationHandler{
 		api:    api,
@@ -35,6 +37,7 @@ func NewMyRegistrationHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
 		users:  users,
 		reg:    reg,
 		events: events,
+		logs:   logs,
 		log:    log.With("handler", "my_registration"),
 	}
 }
@@ -69,7 +72,7 @@ func (h *MyRegistrationHandler) OnCallback(ctx context.Context, upd *schemes.Mes
 	case "forget_no":
 		h.onForgetNo(ctx, chatID, userMaxID)
 	case "history":
-		h.onHistory(ctx, chatID)
+		h.onHistory(ctx, chatID, userMaxID)
 	case "qr":
 		// День 15.
 		h.sendText(ctx, chatID, messages.QRNotAvailable())
@@ -133,14 +136,63 @@ func (h *MyRegistrationHandler) onShow(ctx context.Context, chatID, userMaxID in
 }
 
 // onHistory — последние 10 записей audit log пользователя.
-func (h *MyRegistrationHandler) onHistory(ctx context.Context, chatID int64) {
-	// На День 9 нужен service.ActionLog. У нас его пока нет публичным сервисом,
-	// но история «облегчённая» — покажем активные/прошедшие записи.
-	// Полноценная история через ActionLogRepo появится отдельно.
-	if err := h.api.SendTextWithKeyboard(ctx, chatID,
-		messages.HistoryEmpty(), keyboards.MainMenu()); err != nil {
+func (h *MyRegistrationHandler) onHistory(ctx context.Context, chatID, userMaxID int64) {
+	user, err := h.users.GetByMaxID(ctx, userMaxID)
+	if err != nil {
+		h.log.Error("history: get user failed", "err", err)
+		h.sendError(ctx, chatID)
+		return
+	}
+	if user == nil {
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.HistoryEmpty(), keyboards.MainMenu()); err != nil {
+			h.log.Error("send history empty failed", "err", err)
+		}
+		return
+	}
+
+	logs, err := h.logs.ListByUser(ctx, user.ID, 10)
+	if err != nil {
+		h.log.Error("history: list failed", "err", err)
+		h.sendError(ctx, chatID)
+		return
+	}
+	if len(logs) == 0 {
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.HistoryEmpty(), keyboards.MainMenu()); err != nil {
+			h.log.Error("send history empty failed", "err", err)
+		}
+		return
+	}
+
+	// Собираем текстовый список.
+	lines := []string{messages.HistoryHeader(), ""}
+	for _, l := range logs {
+		lines = append(lines, messages.HistoryLine(l))
+	}
+	text := joinLines(lines)
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, text, keyboards.MainMenu()); err != nil {
 		h.log.Error("send history failed", "err", err)
 	}
+}
+
+// joinLines — локальная альтернатива strings.Join (избегаем лишний импорт).
+func joinLines(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	total := 0
+	for _, l := range lines {
+		total += len(l) + 1
+	}
+	out := make([]byte, 0, total)
+	for i, l := range lines {
+		if i > 0 {
+			out = append(out, '\n')
+		}
+		out = append(out, l...)
+	}
+	return string(out)
 }
 
 func (h *MyRegistrationHandler) onForgetAsk(ctx context.Context, chatID, userMaxID int64) {

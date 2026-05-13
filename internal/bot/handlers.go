@@ -11,6 +11,7 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/fsm"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/handlers"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/repo"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 )
 
@@ -24,13 +25,16 @@ type Handlers struct {
 	Log *slog.Logger
 	FSM *fsm.Manager
 
-	Start        *handlers.StartHandler
-	Fallback     *handlers.FallbackHandler
-	Events       *handlers.EventsHandler
-	Registration *handlers.RegistrationHandler
-	MyReg        *handlers.MyRegistrationHandler
-	Cancel       *handlers.CancelHandler
-	Waitlist     *handlers.WaitlistHandler
+	Start         *handlers.StartHandler
+	Fallback      *handlers.FallbackHandler
+	Events        *handlers.EventsHandler
+	Registration  *handlers.RegistrationHandler
+	MyReg         *handlers.MyRegistrationHandler
+	Cancel        *handlers.CancelHandler
+	Waitlist      *handlers.WaitlistHandler
+	Organizer     *handlers.OrganizerHandler
+	OrganizerList *handlers.OrganizerListHandler
+	OrgNotify     *handlers.OrganizerNotifyHandler
 }
 
 // HandlersConfig — групповая инициализация. По мере роста зависимостей удобнее
@@ -42,6 +46,11 @@ type HandlersConfig struct {
 	Events          service.Event
 	Users           service.User
 	Registration    service.Registration
+	ActionLogs      service.ActionLog
+	Role            service.Role
+	Notification    service.Notification
+	RegsRepo        repo.RegistrationRepo
+	DB              repo.Querier
 	WaitlistEnabled bool
 	PolicyVersion   string
 }
@@ -58,10 +67,15 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 	h.Registration = handlers.NewRegistrationHandler(cfg.API, cfg.FSM,
 		cfg.Registration, cfg.Users, cfg.Events, cfg.Log, cfg.PolicyVersion)
 	h.MyReg = handlers.NewMyRegistrationHandler(cfg.API, cfg.FSM,
-		cfg.Users, cfg.Registration, cfg.Events, cfg.Log)
+		cfg.Users, cfg.Registration, cfg.Events, cfg.ActionLogs, cfg.Log)
 	h.Cancel = handlers.NewCancelHandler(cfg.API, cfg.FSM,
 		cfg.Registration, cfg.Users, cfg.Events, cfg.Log)
 	h.Waitlist = handlers.NewWaitlistHandler(cfg.API, cfg.FSM, h.Registration, cfg.Log)
+	h.Organizer = handlers.NewOrganizerHandler(cfg.API, cfg.FSM, cfg.Role, cfg.Events, cfg.Log)
+	h.OrganizerList = handlers.NewOrganizerListHandler(cfg.API, cfg.FSM, cfg.Role,
+		cfg.Events, cfg.RegsRepo, cfg.DB, cfg.Log)
+	h.OrgNotify = handlers.NewOrganizerNotifyHandler(cfg.API, cfg.FSM, cfg.Role,
+		cfg.Events, cfg.Notification, cfg.RegsRepo, cfg.DB, cfg.Log)
 	return h
 }
 
@@ -83,6 +97,9 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 	case "/forget_me":
 		h.MyReg.OnForgetMeCmd(ctx, upd)
 		return
+	case "/organizer":
+		h.Organizer.OnEntryCmd(ctx, upd)
+		return
 	}
 
 	// Если текст не команда — смотрим FSM и направляем в ожидающий handler.
@@ -97,6 +114,8 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 	switch snap.State {
 	case fsm.StateRegFullName, fsm.StateRegContact, fsm.StateRegInterest:
 		h.Registration.OnText(ctx, upd, snap)
+	case fsm.StateOrganizerNotifText:
+		h.OrgNotify.OnText(ctx, upd, snap)
 	default:
 		h.Fallback.OnText(ctx, upd)
 	}
@@ -121,8 +140,14 @@ func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallba
 		h.Cancel.OnCallback(ctx, upd, p)
 	case callbacks.GroupWaitlist:
 		h.Waitlist.OnCallback(ctx, upd, p)
+	case callbacks.GroupOrg:
+		h.Organizer.OnCallback(ctx, upd, p)
+	case callbacks.GroupOrgList:
+		h.OrganizerList.OnCallback(ctx, upd, p)
+	case callbacks.GroupOrgNotif:
+		h.OrgNotify.OnCallback(ctx, upd, p)
 	default:
-		// Дни 10-12: org/orglist/orgnotif/orgclose/admin/ai
+		// Будущее: orgclose/admin/ai
 		h.Fallback.OnCallback(ctx, upd, p)
 	}
 }

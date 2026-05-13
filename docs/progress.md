@@ -115,45 +115,85 @@
 
 ---
 
-## День 6 — запись: FSM consent → ФИО → контакт → направление → подтверждение ⏳
+## День 6 — запись: FSM consent → ФИО → контакт → направление → подтверждение ✅
 
-- [x] internal/service/user.go — EnsureProfile, GetByMaxID, GrantConsent (с ActionLog), ForgetMe
-- [x] internal/service/registration.go — Registration.Register с транзакцией RepeatableRead:
-  - HasConsent → ErrConsentRequired
-  - Event status → ErrEventNotFound / ErrEventClosed
-  - Active duplicate → ErrAlreadyRegistered
-  - В транзакции: GetForUpdate event → CountByEvent(registered+attended) → Create
-  - Waitlist если мест нет и enabled, иначе ErrNoSeats
-  - ActionLog registration_created / waitlist_added
-- [x] internal/bot/handlers/registration.go — полный FSM сценарий с consent шагом
-- [x] internal/bot/handlers/my_registration.go — /forget_me с двухшаговым подтверждением через StateForgetMeConfirm
-- [x] RouteMessage: /forget_me + FSM текст (reg_full_name/contact/interest)
-- [x] RouteCallback: reg:* и my:*
-- [x] Validation tests (validFullName, validContact)
-- [ ] manual smoke полного сценария (требует живой бот)
-- [ ] service.Registration интеграционный тест (требует Postgres)
-- [ ] commit + push
-
-**Артефакт:** пользователь проходит полный сценарий, без согласия записаться нельзя, /forget_me удаляет всё. ⏳
+- [x] service.User (EnsureProfile, GrantConsent с ActionLog, ForgetMe)
+- [x] service.Registration.Register с транзакцией RepeatableRead (FOR UPDATE)
+- [x] handlers/registration.go (полный FSM с consent шагом)
+- [x] handlers/my_registration.go (/forget_me, двухшаговое подтверждение)
+- [x] commit + push
 
 ---
 
-## Дни 7-20 ⬜
+## День 7 — повторная запись, capacity, waitlist ✅
 
-- [ ] **День 7** — повторная запись, capacity, waitlist (уже частично сделано в Дне 6)
-- [ ] **День 8** — отмена записи + waitlist promote
-- [ ] **День 9** — история действий
-- [ ] **День 10** — роль организатора и меню `/organizer`
-- [ ] **День 11** — список участников + CSV-экспорт
-- [ ] **День 12** — рассылка (без AI)
+- [x] service.Registration делает все проверки (см. День 6: ErrAlreadyRegistered, ErrNoSeats)
+- [x] handlers/waitlist.go (wl:join делегирует RegistrationHandler.onStart, который через сервис кладёт в waitlist)
+- [x] keyboards.EventCard показывает «Встать в лист ожидания» когда мест 0 + waitlistEnabled
+- [x] RouteCallback: GroupWaitlist подключён
+
+---
+
+## День 8 — отмена записи + waitlist promote ✅
+
+- [x] service.Registration.Cancel(regID, by) в транзакции FOR UPDATE
+- [x] Auto-promote первого waitlist при освобождении места (с defensive повторной capacity-проверкой)
+- [x] service.Registration.ListActiveByUser, GetActive
+- [x] handlers/cancel.go (двухшаговая отмена с проверкой ownership через ListActiveByUser)
+- [x] my_registration.onShow теперь грузит реальные регистрации + клавиатура с кнопкой «Отменить»
+
+---
+
+## День 9 — история действий ✅
+
+- [x] service.ActionLog (ListByUser/ByEvent)
+- [x] my_registration.onHistory грузит и рендерит последние 10 действий через messages.HistoryHeader/HistoryLine
+- [x] подключение в DI
+
+---
+
+## День 10 — роль организатора и /organizer меню ✅
+
+- [x] service.Role (Bootstrap по env, RequireOrganizer, RequireEventOwner)
+- [x] Bootstrap вызывается на старте app.New (admin → admin, organizer → organizer; admin не понижается)
+- [x] handlers/organizer.go (/organizer cmd + showMenu + showStats + AI-сводка заглушка)
+- [x] RouteMessage: /organizer
+- [x] RouteCallback: GroupOrg
+- [x] keyboards.OrganizerEventActions (Участники/CSV/Рассылка/AI-сводка/Закрыть)
+- [x] messages.OrganizerStats с детерминированной сортировкой top-interests
+
+---
+
+## День 11 — список участников + CSV-экспорт ✅
+
+- [x] handlers/organizer_list.go:
+  - orglist:show:<eventID>:<offset> — постраничный список (10/страница) с маскировкой контактов
+  - orglist:csv:<eventID> — CSV как текст в чате (до 3500 символов, иначе обрезается с указанием)
+- [x] keyboards.OrganizerParticipants (нав + Назад к мероприятию)
+- [x] RouteCallback: GroupOrgList
+
+---
+
+## День 12 — рассылка (без AI) ✅
+
+- [x] service.Notification.SendBroadcast (rate-limit между сообщениями, ActionLog notification_sent на каждого получателя, MarkSent/MarkFailed на дубль/ошибку)
+- [x] handlers/organizer_notify.go (FSM organizer_notif_text → organizer_notif_confirm)
+- [x] RouteMessage: text input в organizer_notif_text
+- [x] RouteCallback: GroupOrgNotif (start/send/cancel/ai-заглушка)
+- [x] keyboards.OrganizerNotifConfirm (Отправить/Отмена/Улучшить через AI)
+
+---
+
+## Дни 13-20 ⬜
+
 - [ ] **День 13** — backend admin REST API + JWT auth
 - [ ] **День 14** — frontend Next.js: bootstrap, auth, dashboard, events, participants
 - [ ] **День 15** — QR-коды в боте, страница check-in, AI rewrite в админке
-- [ ] **День 16** — AI-сервисы в боте + напоминания
-- [ ] **День 17** — обработка ошибок и устойчивость
+- [ ] **День 16** — AI-сервисы (GigaChat) + scheduler с reminders
+- [ ] **День 17** — обработка ошибок и устойчивость, rate-limit per user
 - [ ] **День 18** — webhook-режим и полировка демо
 - [ ] **День 19** — security hardening, SECURITY.md
-- [ ] **День 20** — финальный прогон + резерв
+- [ ] **День 20** — финальный прогон + резервное демо-видео
 
 ---
 
