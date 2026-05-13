@@ -85,11 +85,14 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m
+      - name: golangci-lint (build with project Go version)
+        # Собираем линтер локально через go install — он подхватит установленный
+        # Go 1.25.x, и не падает с "language version 1.24 lower than targeted 1.25".
+        # Не используем golangci-lint-action из-за того что официальные
+        # бинари v1.x скомпилированы Go 1.24.
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+          "$(go env GOPATH)"/bin/golangci-lint run --timeout=5m
 
   # =========================================================================
   # security: govulncheck + gosec

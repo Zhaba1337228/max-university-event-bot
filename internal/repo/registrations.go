@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
 )
 
@@ -185,13 +187,12 @@ func (r *registrationsRepo) ListByEvent(ctx context.Context, q Querier, eventID 
 		offset = 0
 	}
 
-	// Если status пустой - возвращаем все.
-	var rows interface {
-		Next() bool
-		Scan(dest ...any) error
-		Err() error
-		Close()
-	}
+	// pgx.Rows используем как конкретный тип (без анонимного интерфейса),
+	// чтобы sqlclosecheck корректно отследил defer Close().
+	var (
+		rows pgx.Rows
+		err  error
+	)
 	if status == "" {
 		const stmt = `
 SELECT ` + regColumns + `
@@ -199,11 +200,7 @@ FROM registrations
 WHERE event_id = $1
 ORDER BY created_at ASC
 LIMIT $2 OFFSET $3`
-		r, err := q.Query(ctx, stmt, eventID, limit, offset)
-		if err != nil {
-			return nil, fmt.Errorf("list by event: %w", err)
-		}
-		rows = r
+		rows, err = q.Query(ctx, stmt, eventID, limit, offset)
 	} else {
 		const stmt = `
 SELECT ` + regColumns + `
@@ -211,11 +208,10 @@ FROM registrations
 WHERE event_id = $1 AND status = $2
 ORDER BY created_at ASC
 LIMIT $3 OFFSET $4`
-		r, err := q.Query(ctx, stmt, eventID, string(status), limit, offset)
-		if err != nil {
-			return nil, fmt.Errorf("list by event with status: %w", err)
-		}
-		rows = r
+		rows, err = q.Query(ctx, stmt, eventID, string(status), limit, offset)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list by event: %w", err)
 	}
 	defer rows.Close()
 

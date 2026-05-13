@@ -24,9 +24,11 @@ type Handlers struct {
 	Log *slog.Logger
 	FSM *fsm.Manager
 
-	Start    *handlers.StartHandler
-	Fallback *handlers.FallbackHandler
-	Events   *handlers.EventsHandler
+	Start        *handlers.StartHandler
+	Fallback     *handlers.FallbackHandler
+	Events       *handlers.EventsHandler
+	Registration *handlers.RegistrationHandler
+	MyReg        *handlers.MyRegistrationHandler
 }
 
 // HandlersConfig — групповая инициализация. По мере роста зависимостей удобнее
@@ -36,7 +38,10 @@ type HandlersConfig struct {
 	Log             *slog.Logger
 	FSM             *fsm.Manager
 	Events          service.Event
+	Users           service.User
+	Registration    service.Registration
 	WaitlistEnabled bool
+	PolicyVersion   string
 }
 
 // NewHandlers собирает Handlers по конфигу.
@@ -48,16 +53,19 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 	h.Start = handlers.NewStartHandler(cfg.API, cfg.FSM, cfg.Log)
 	h.Fallback = handlers.NewFallbackHandler(cfg.API, cfg.FSM, cfg.Log)
 	h.Events = handlers.NewEventsHandler(cfg.API, cfg.FSM, cfg.Events, cfg.Log, cfg.WaitlistEnabled)
+	h.Registration = handlers.NewRegistrationHandler(cfg.API, cfg.FSM,
+		cfg.Registration, cfg.Users, cfg.Events, cfg.Log, cfg.PolicyVersion)
+	h.MyReg = handlers.NewMyRegistrationHandler(cfg.API, cfg.FSM, cfg.Users, cfg.Log)
 	return h
 }
 
 // RouteMessage маршрутизирует MessageCreatedUpdate:
-//   - команды (/start, /help, /organizer, /admin_login, /forget_me) — приоритет;
+//   - команды (/start, /help, /forget_me, /organizer, /admin_login) — приоритет;
 //   - иначе — смотрим текущее FSM-состояние; если оно ожидает текст —
 //     отдаём соответствующему handler'у; иначе — fallback.
 func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreatedUpdate) {
-	cmd := strings.ToLower(strings.TrimSpace(upd.Message.Body.Text))
-	cmd = strings.SplitN(cmd, " ", 2)[0] // отделяем аргументы команды
+	text := strings.TrimSpace(upd.Message.Body.Text)
+	cmd := strings.ToLower(strings.SplitN(text, " ", 2)[0])
 
 	switch cmd {
 	case "/start":
@@ -66,29 +74,45 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 	case "/help":
 		h.Start.OnHelp(ctx, upd)
 		return
+	case "/forget_me":
+		h.MyReg.OnForgetMeCmd(ctx, upd)
+		return
 	}
 
-	// На День 4 — для текстовых сообщений вне команд показываем fallback.
-	// Реальная FSM-маршрутизация (reg_full_name, reg_contact и т.д.)
-	// появится в Дне 6 и расширит этот switch.
-	h.Fallback.OnText(ctx, upd)
+	// Если текст не команда — смотрим FSM и направляем в ожидающий handler.
+	userMaxID := upd.Message.Sender.UserId
+	snap, err := h.FSM.Load(ctx, userMaxID)
+	if err != nil {
+		h.Log.Warn("fsm load failed", "err", err, "user_id", userMaxID)
+		h.Fallback.OnText(ctx, upd)
+		return
+	}
+
+	switch snap.State {
+	case fsm.StateRegFullName, fsm.StateRegContact, fsm.StateRegInterest:
+		h.Registration.OnText(ctx, upd, snap)
+	default:
+		h.Fallback.OnText(ctx, upd)
+	}
 }
 
 // RouteCallback маршрутизирует MessageCallbackUpdate по группе payload'а.
 //
-// Группы, для которых ещё нет реального handler'а (дни 6-12), уходят в
+// Группы, для которых ещё нет реального handler'а (дни 7-12), уходят в
 // Fallback с понятным сообщением «Эта кнопка устарела».
 func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallbackUpdate) {
 	p := callbacks.Parse(upd.Callback.Payload)
 	switch p.Group {
-	case callbacks.GroupMain:
-		h.Start.OnMainMenu(ctx, upd)
-	case callbacks.GroupBack:
+	case callbacks.GroupMain, callbacks.GroupBack:
 		h.Start.OnMainMenu(ctx, upd)
 	case callbacks.GroupEvent:
 		h.Events.OnCallback(ctx, upd, p)
+	case callbacks.GroupReg:
+		h.Registration.OnCallback(ctx, upd, p)
+	case callbacks.GroupMy:
+		h.MyReg.OnCallback(ctx, upd, p)
 	default:
-		// Дни 6-12: появятся reg/my/cancel/wl/org/orglist/orgnotif/orgclose/admin/ai
+		// Дни 7-12: cancel/wl/org/orglist/orgnotif/orgclose/admin/ai
 		h.Fallback.OnCallback(ctx, upd, p)
 	}
 }

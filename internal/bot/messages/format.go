@@ -5,7 +5,6 @@
 package messages
 
 import (
-	"strings"
 	"time"
 
 	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
@@ -81,17 +80,6 @@ func HumanEventStatus(s domain.EventStatus) string {
 		return "завершено"
 	}
 	return string(s)
-}
-
-// joinNonEmpty склеивает непустые строки через sep.
-func joinNonEmpty(sep string, lines ...string) string {
-	out := make([]string, 0, len(lines))
-	for _, l := range lines {
-		if strings.TrimSpace(l) != "" {
-			out = append(out, l)
-		}
-	}
-	return strings.Join(out, sep)
 }
 
 // --- внутреннее форматирование (без выделения в отдельный пакет — на 5 функций) ---

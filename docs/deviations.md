@@ -156,10 +156,21 @@
 - **Реальность:** другие команды (`/organizer`, `/admin_login`, `/forget_me`) и callback-группы (`ev:`, `reg:`, `my:`, `wl:`, `cancel:`, `org:`, ...) определены как payloads, но handlers ещё не реализованы — будут в днях 5-12.
 - **Дата:** 2026-05-13.
 
-### 19. notifications_dedup: IMMUTABLE-выражение вместо date_trunc
+### 19. notifications_dedup: IMMUTABLE-функция вместо date_trunc / extract
 
 - **План:** раздел 8.9 — `CREATE UNIQUE INDEX uniq_notif_dedup ON notifications (user_id, event_id, type, date_trunc('minute', scheduled_at))`.
-- **Реальность:** PostgreSQL отвергает `date_trunc(text, timestamptz)` в expression index с ошибкой «functions in index expression must be marked IMMUTABLE (SQLSTATE 42P17)» — потому что timestamptz зависит от session timezone.
-- **Источник:** CI run #25824279837, job `migrate up against real Postgres`.
-- **Решение:** заменили на `((EXTRACT(EPOCH FROM scheduled_at)::bigint) / 60)` — это integer-арифметика, IMMUTABLE. Та же гарантия «1-минутный bucket», но не зависит от timezone. Соответствующий ON CONFLICT в `repo.Notifications.Schedule` обновлён синхронно.
+- **Реальность (после двух итераций):**
+  - `date_trunc('minute', timestamptz)` — STABLE (зависит от session timezone). Postgres отказывает.
+  - `EXTRACT(EPOCH FROM timestamptz)` — тоже STABLE по той же причине.
+  - `EXTRACT(EPOCH FROM timestamp)` — IMMUTABLE, но требует каста timestamptz → timestamp.
+  - `timestamptz AT TIME ZONE 'UTC'` (с **literal** timezone) — IMMUTABLE и даёт timestamp без TZ.
+- **Решение:** определена кастомная `notif_minute_bucket(timestamptz) RETURNS bigint LANGUAGE sql IMMUTABLE PARALLEL SAFE`, использующая `AT TIME ZONE 'UTC'` + `EXTRACT(EPOCH FROM timestamp)` + `/ 60`. Уникальный индекс и ON CONFLICT в `repo.Notifications.Schedule` ссылаются на эту функцию.
+- **Источники:** CI runs #25824279837 и #25824557380.
+- **Дата:** 2026-05-13.
+
+### 20. CI: golangci-lint собираем через `go install` (Go 1.25 mismatch)
+
+- **План:** не специфицировано.
+- **Реальность:** официальный `golangci-lint-action@v6` ставит бинарь, скомпилированный с Go 1.24. С `go.mod = go 1.25.7` он валится: «the Go language version used to build golangci-lint is lower than the targeted Go version».
+- **Решение:** в CI вызываем `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8` (соберётся с установленной Go stable) и запускаем напрямую из `$(go env GOPATH)/bin`.
 - **Дата:** 2026-05-13.

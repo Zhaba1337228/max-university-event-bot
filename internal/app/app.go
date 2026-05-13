@@ -58,12 +58,17 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	statesRepo := repo.NewUserStates()
 	eventsRepo := repo.NewEvents()
 	regsRepo := repo.NewRegistrations()
+	usersRepo := repo.NewUsers()
+	logsRepo := repo.NewActionLogs()
 
 	// 3. FSM
 	fsmMgr := fsm.NewManager(statesRepo, pool)
 
 	// 4. Services
 	eventSvc := service.NewEvent(pool, eventsRepo, regsRepo)
+	userSvc := service.NewUser(pool, usersRepo, logsRepo)
+	regSvc := service.NewRegistration(pool, eventsRepo, regsRepo, usersRepo, logsRepo,
+		cfg.Business.WaitlistEnabled)
 
 	// 5. MAX client + ping
 	mc, err := maxclient.New(maxclient.Config{
@@ -94,7 +99,10 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 		Log:             log,
 		FSM:             fsmMgr,
 		Events:          eventSvc,
+		Users:           userSvc,
+		Registration:    regSvc,
 		WaitlistEnabled: cfg.Business.WaitlistEnabled,
+		PolicyVersion:   cfg.Policy.PrivacyPolicyVersion,
 	})
 	a.dispatcher = bot.NewDispatcher(log, handlers, 32)
 	a.longpoll = longpoll.New(mc, log)

@@ -100,11 +100,47 @@
 
 ---
 
-## Дни 5-20 ⬜
+## День 5 — мероприятия (список + карточка) ✅
 
-- [ ] **День 5** — мероприятия: список + карточка
-- [ ] **День 6** — запись: FSM consent → ФИО → контакт → направление → подтверждение
-- [ ] **День 7** — повторная запись, capacity, waitlist
+- [x] internal/service/errors.go — каталог доменных ошибок (Err*)
+- [x] internal/service/event.go — Event service + EventWithFree (ListOpen, GetOpen, Get, Stats, ListByOrganizer)
+- [x] internal/service/event_test.go — 6 behavior tests (NotFound, Closed, FreeSeats, no-negative, paging, missing stats)
+- [x] internal/bot/handlers/events.go — OnCallback (list with offset/hasMore + show карточки)
+- [x] FSM сохраняет Offset (back-кнопка) и CurrentEventID (передача в reg-handler Дня 6)
+- [x] callbacks.GroupEvent роутится в bot/handlers.go RouteCallback
+- [x] DI: eventSvc подключён в app.go, WaitlistEnabled пробрасывается в Handlers
+- [x] commit + push
+
+**Артефакт:** список открытых мероприятий с пагинацией + карточка со свободными местами и кнопками. ✅
+
+---
+
+## День 6 — запись: FSM consent → ФИО → контакт → направление → подтверждение ⏳
+
+- [x] internal/service/user.go — EnsureProfile, GetByMaxID, GrantConsent (с ActionLog), ForgetMe
+- [x] internal/service/registration.go — Registration.Register с транзакцией RepeatableRead:
+  - HasConsent → ErrConsentRequired
+  - Event status → ErrEventNotFound / ErrEventClosed
+  - Active duplicate → ErrAlreadyRegistered
+  - В транзакции: GetForUpdate event → CountByEvent(registered+attended) → Create
+  - Waitlist если мест нет и enabled, иначе ErrNoSeats
+  - ActionLog registration_created / waitlist_added
+- [x] internal/bot/handlers/registration.go — полный FSM сценарий с consent шагом
+- [x] internal/bot/handlers/my_registration.go — /forget_me с двухшаговым подтверждением через StateForgetMeConfirm
+- [x] RouteMessage: /forget_me + FSM текст (reg_full_name/contact/interest)
+- [x] RouteCallback: reg:* и my:*
+- [x] Validation tests (validFullName, validContact)
+- [ ] manual smoke полного сценария (требует живой бот)
+- [ ] service.Registration интеграционный тест (требует Postgres)
+- [ ] commit + push
+
+**Артефакт:** пользователь проходит полный сценарий, без согласия записаться нельзя, /forget_me удаляет всё. ⏳
+
+---
+
+## Дни 7-20 ⬜
+
+- [ ] **День 7** — повторная запись, capacity, waitlist (уже частично сделано в Дне 6)
 - [ ] **День 8** — отмена записи + waitlist promote
 - [ ] **День 9** — история действий
 - [ ] **День 10** — роль организатора и меню `/organizer`

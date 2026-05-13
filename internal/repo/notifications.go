@@ -26,13 +26,13 @@ func (r *notificationsRepo) Schedule(ctx context.Context, q Querier, n *domain.N
 	if n.Status == "" {
 		n.Status = domain.NotifStatusPending
 	}
-	// ON CONFLICT использует то же выражение, что и uniq_notif_dedup
-	// (см. миграция 8): integer-минутный bucket из EPOCH. date_trunc нельзя —
-	// он не IMMUTABLE и Postgres откажется создать индекс.
+	// ON CONFLICT использует ту же IMMUTABLE-функцию что и uniq_notif_dedup
+	// (см. миграция 8). Прямой EXTRACT(EPOCH FROM timestamptz) и date_trunc —
+	// STABLE и PostgreSQL не создаст по ним expression index.
 	const stmt = `
 INSERT INTO notifications (event_id, user_id, type, text, status, scheduled_at)
 VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (user_id, event_id, type, ((EXTRACT(EPOCH FROM scheduled_at)::bigint) / 60))
+ON CONFLICT (user_id, event_id, type, notif_minute_bucket(scheduled_at))
 DO NOTHING
 RETURNING id`
 
