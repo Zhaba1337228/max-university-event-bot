@@ -1,0 +1,12 @@
+# Принудительно LF для всех текстовых файлов (Go, YAML, SQL, скрипты).
+* text=auto eol=lf
+
+# Бинарники
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.exe binary

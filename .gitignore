@@ -1,0 +1,34 @@
+# Bins
+/bin/
+/vendor/
+*.exe
+
+# Logs
+*.log
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Coverage
+*.coverprofile
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend (Day 14+)
+/frontend/node_modules/
+/frontend/.next/
+/frontend/out/
+/frontend/build/
+/frontend/.turbo/
