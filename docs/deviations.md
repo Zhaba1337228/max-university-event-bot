@@ -25,3 +25,52 @@
 - **Реальность:** `go 1.25.4` (host toolchain).
 - **Почему:** `1.24+` в плане означает «минимум», 1.25 совместима и используется в env.
 - **Дата:** 2026-05-13.
+
+---
+
+## День 2 (тексты + клавиатуры + payloads)
+
+### 3. MAX SDK: тип Keyboard вместо KeyboardBuilder
+
+- **План:** раздел 16.2 — `func MainMenu(api *maxbot.Api) *maxbot.KeyboardBuilder`.
+- **Реальность (SDK v1.6.17):** возвращаемый тип — `*maxbot.Keyboard`. Метод `api.Messages.NewKeyboardBuilder()` существует, но возвращает `*Keyboard`. Это просто naming — функционально совпадает.
+- **Источник:** `keyboard.go` и `messages.go` в `github.com/max-messenger/max-bot-api-client-go@v1.6.17`.
+- **Решение:** во всех `keyboards/*.go` используется `*maxbot.Keyboard`.
+- **Дата:** 2026-05-13.
+
+### 4. MAX SDK: Send возвращает только error
+
+- **План:** раздел 11.5 — `_, err := api.Messages.Send(ctx, msg)`.
+- **Реальность (SDK v1.6.17):** `Send(ctx, m *Message) error` (один возврат). Для получения отправленного `schemes.Message` — `SendWithResult(ctx, m) (*schemes.Message, error)`.
+- **Источник:** `messages.go`.
+- **Решение:** обычная отправка — `api.Messages.Send`. Когда нужен `message_id` (QR-картинка, см. День 15) — `SendWithResult`.
+- **Дата:** 2026-05-13.
+
+### 5. MAX SDK: Edit/Delete вместо EditMessage/DeleteMessage в плане
+
+- **План:** раздел 11.11 — `Edit`, `Delete`.
+- **Реальность:** методы называются `EditMessage(ctx, messageID, m)` и `DeleteMessage(ctx, messageID)`.
+- **Источник:** `messages.go`.
+- **Решение:** используем реальные имена.
+- **Дата:** 2026-05-13.
+
+### 6. Размер страницы списка событий — 8 вместо абстрактного
+
+- **План:** раздел 16.2 — `func EventList(api, events)` без указания pageSize.
+- **Реальность:** добавлена константа `keyboards.PageSize() == 8`. MAX-лимит 30 рядов на клавиатуру; 8 — комфортно для мобильного.
+- **Решение:** при превышении страница ограничивается; навигация «Назад/Дальше» работает через offset.
+- **Дата:** 2026-05-13.
+
+### 7. Состояние ForgetMeConfirm добавлено в FSM
+
+- **План:** раздел 14.1 — нет явного состояния для двухшагового /forget_me.
+- **Реальность:** добавил `StateForgetMeConfirm`, чтобы handler мог проверить, что callback пришёл из ожидаемого экрана (защита от устаревших кнопок).
+- **Решение:** при `/forget_me` сначала Save(ForgetMeConfirm), затем при ForgetMeYes → реальное удаление.
+- **Дата:** 2026-05-13.
+
+### 8. Добавлены MyShowQR/OrgAISummary/ConsentRecorded и др. payloads/messages
+
+- **План:** базовый набор callback-payload'ов и шаблонов.
+- **Реальность:** дополнительно сделаны конструкторы под кнопки и тексты, которые понадобятся в днях 15-16 (QR-показ, AI-сводка организатору, подтверждение согласия, MyRegistrationsList).
+- **Решение:** объявлять заранее дешевле, чем потом редактировать публичный пакет.
+- **Дата:** 2026-05-13.

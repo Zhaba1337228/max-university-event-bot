@@ -1,0 +1,214 @@
+package keyboards_test
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/max-messenger/max-bot-api-client-go/schemes"
+
+	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/keyboards"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
+)
+
+// rowsCount возвращает число рядов в built клавиатуре.
+// Через Build() переводим в schemes.Keyboard, у которой доступны ряды.
+func rowsCount(kb interface {
+	Build() schemes.Keyboard
+}) int {
+	return len(kb.Build().Buttons)
+}
+
+func TestMainMenuStructure(t *testing.T) {
+	t.Parallel()
+
+	kb := keyboards.MainMenu()
+	if rows := rowsCount(kb); rows != 4 {
+		t.Errorf("MainMenu: want 4 rows, got %d", rows)
+	}
+}
+
+func TestEventListEmpty(t *testing.T) {
+	t.Parallel()
+
+	kb := keyboards.EventList(nil, 0, false)
+	rows := kb.Build().Buttons
+	// 2 ряда: пустая навигация (без кнопок) + «в главное меню»
+	if len(rows) != 2 {
+		t.Errorf("want 2 rows for empty list, got %d", len(rows))
+	}
+}
+
+func TestEventListWithPaging(t *testing.T) {
+	t.Parallel()
+
+	events := []*domain.Event{
+		{ID: 1, Title: "A"},
+		{ID: 2, Title: "B"},
+	}
+	kb := keyboards.EventList(events, 8, true)
+	rows := kb.Build().Buttons
+
+	// 2 события + ряд навигации (Back+Дальше) + ряд "В главное меню" = 4
+	if len(rows) != 4 {
+		t.Errorf("want 4 rows, got %d", len(rows))
+	}
+	// в навигации должно быть 2 кнопки
+	navRow := rows[2]
+	if len(navRow) != 2 {
+		t.Errorf("want 2 nav buttons, got %d", len(navRow))
+	}
+}
+
+func TestEventCardFreeSeats(t *testing.T) {
+	t.Parallel()
+
+	kb := keyboards.EventCard(42, 5, true, 0)
+	rows := kb.Build().Buttons
+
+	// «Записаться» + «Назад к списку» + «В главное меню» = 3
+	if len(rows) != 3 {
+		t.Fatalf("want 3 rows, got %d", len(rows))
+	}
+	firstBtn, ok := rows[0][0].(schemes.CallbackButton)
+	if !ok {
+		t.Fatalf("first button is not callback: %T", rows[0][0])
+	}
+	if !strings.Contains(firstBtn.Text, "Записаться") {
+		t.Errorf("first button text = %q, want contains 'Записаться'", firstBtn.Text)
+	}
+	if firstBtn.Intent != schemes.POSITIVE {
+		t.Errorf("want POSITIVE intent, got %v", firstBtn.Intent)
+	}
+}
+
+func TestEventCardWaitlist(t *testing.T) {
+	t.Parallel()
+
+	kb := keyboards.EventCard(42, 0, true, 0)
+	firstBtn := kb.Build().Buttons[0][0].(schemes.CallbackButton)
+	if !strings.Contains(firstBtn.Text, "лист ожидания") {
+		t.Errorf("want 'лист ожидания' button, got %q", firstBtn.Text)
+	}
+}
+
+func TestEventCardNoWaitlistAndNoSeats(t *testing.T) {
+	t.Parallel()
+
+	kb := keyboards.EventCard(42, 0, false, 0)
+	rows := kb.Build().Buttons
+	// только «Назад к списку» + «В главное меню»
+	if len(rows) != 2 {
+		t.Errorf("want 2 rows when no seats and no waitlist, got %d", len(rows))
+	}
+}
+
+func TestRegConsentTwoButtons(t *testing.T) {
+	t.Parallel()
+
+	kb := keyboards.RegConsent()
+	rows := kb.Build().Buttons
+	if len(rows) != 1 || len(rows[0]) != 2 {
+		t.Fatalf("RegConsent: want 1 row with 2 buttons, got rows=%d, cols0=%d",
+			len(rows), func() int {
+				if len(rows) == 0 {
+					return 0
+				}
+				return len(rows[0])
+			}())
+	}
+}
+
+func TestOrganizerEventActionsWithStatus(t *testing.T) {
+	t.Parallel()
+
+	// Open event → кнопка «Закрыть регистрацию» присутствует.
+	kbOpen := keyboards.OrganizerEventActions(42, domain.EventStatusOpen)
+	if !hasCallbackText(kbOpen.Build(), "Закрыть регистрацию") {
+		t.Errorf("OrganizerEventActions(open): missing 'Закрыть регистрацию'")
+	}
+
+	// Closed event → нет кнопки закрытия.
+	kbClosed := keyboards.OrganizerEventActions(42, domain.EventStatusClosed)
+	if hasCallbackText(kbClosed.Build(), "Закрыть регистрацию") {
+		t.Errorf("OrganizerEventActions(closed): unexpected 'Закрыть регистрацию' present")
+	}
+}
+
+func TestAdminLoginLink(t *testing.T) {
+	t.Parallel()
+
+	url := "https://admin.example.com/auth?t=jwt-here"
+	kb := keyboards.AdminLoginLink(url)
+	rows := kb.Build().Buttons
+	if len(rows) != 1 || len(rows[0]) != 1 {
+		t.Fatalf("want 1x1, got %dx%d", len(rows), func() int {
+			if len(rows) == 0 {
+				return 0
+			}
+			return len(rows[0])
+		}())
+	}
+	btn, ok := rows[0][0].(schemes.LinkButton)
+	if !ok {
+		t.Fatalf("want LinkButton, got %T", rows[0][0])
+	}
+	if btn.Url != url {
+		t.Errorf("URL: want %q, got %q", url, btn.Url)
+	}
+}
+
+func TestYesNoNoSurprises(t *testing.T) {
+	t.Parallel()
+
+	kb := keyboards.YesNo("Да", "yes:ok", "Нет", "no:ok")
+	rows := kb.Build().Buttons
+	if len(rows) != 1 || len(rows[0]) != 2 {
+		t.Fatalf("YesNo: want 1x2, got %dx%d", len(rows), len(rows[0]))
+	}
+	if got := rows[0][0].(schemes.CallbackButton); got.Intent != schemes.POSITIVE {
+		t.Errorf("yes intent: want POSITIVE, got %v", got.Intent)
+	}
+	if got := rows[0][1].(schemes.CallbackButton); got.Intent != schemes.NEGATIVE {
+		t.Errorf("no intent: want NEGATIVE, got %v", got.Intent)
+	}
+}
+
+func TestMyRegistrationConditional(t *testing.T) {
+	t.Parallel()
+
+	// regID == 0 → нет QR-кнопки и нет «Отменить»
+	kb := keyboards.MyRegistration(0)
+	if hasCallbackText(kb.Build(), "Показать мой QR") {
+		t.Errorf("regID=0: unexpected QR button")
+	}
+	if hasCallbackText(kb.Build(), "Отменить запись") {
+		t.Errorf("regID=0: unexpected cancel button")
+	}
+
+	// regID != 0 → есть обе кнопки
+	kb2 := keyboards.MyRegistration(77)
+	if !hasCallbackText(kb2.Build(), "Показать мой QR") {
+		t.Errorf("regID=77: missing QR button")
+	}
+	if !hasCallbackText(kb2.Build(), "Отменить запись") {
+		t.Errorf("regID=77: missing cancel button")
+	}
+}
+
+// hasCallbackText сканирует все callback-кнопки и возвращает true, если
+// найдена кнопка с подстрокой substr в тексте.
+func hasCallbackText(k schemes.Keyboard, substr string) bool {
+	for _, row := range k.Buttons {
+		for _, b := range row {
+			if cb, ok := b.(schemes.CallbackButton); ok {
+				if strings.Contains(cb.Text, substr) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+var _ = time.Time{} // импорт оставлен для будущих тестов с датами
