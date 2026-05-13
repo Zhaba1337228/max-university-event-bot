@@ -4,15 +4,20 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 
+	maxbot "github.com/max-messenger/max-bot-api-client-go"
 	"github.com/max-messenger/max-bot-api-client-go/schemes"
 
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/callbacks"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/fsm"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/keyboards"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/messages"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/repo"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 )
 
@@ -31,13 +36,21 @@ type RegistrationHandler struct {
 	reg           service.Registration
 	users         service.User
 	events        service.Event
+	qr            service.QR
+	regsRepo      repo.RegistrationRepo
+	db            repo.Querier
 	log           *slog.Logger
 	policyVersion string
 }
 
 // NewRegistrationHandler — конструктор.
+//
+// qr/regsRepo/db опциональны (могут быть nil) — без них handler работает
+// в режиме «без QR»; с ними после успешной регистрации генерирует и
+// отправляет PNG-код отдельным сообщением + сохраняет attendance_code в БД.
 func NewRegistrationHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
 	reg service.Registration, users service.User, events service.Event,
+	qr service.QR, regsRepo repo.RegistrationRepo, db repo.Querier,
 	log *slog.Logger, policyVersion string,
 ) *RegistrationHandler {
 	return &RegistrationHandler{
@@ -46,6 +59,9 @@ func NewRegistrationHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
 		reg:           reg,
 		users:         users,
 		events:        events,
+		qr:            qr,
+		regsRepo:      regsRepo,
+		db:            db,
 		log:           log.With("handler", "registration"),
 		policyVersion: policyVersion,
 	}
@@ -246,6 +262,69 @@ func (h *RegistrationHandler) onConfirm(ctx context.Context, chatID, userMaxID i
 	}
 	if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.RegSuccess(event), keyboards.AfterRegistration()); err != nil {
 		h.log.Error("send success failed", "err", err)
+	}
+
+	// Day 15 — QR-код приглашения отдельным сообщением.
+	// QR опционален: если qrSvc не передан в конструктор — пропускаем без ошибки.
+	if h.qr != nil && h.regsRepo != nil && h.db != nil {
+		h.sendQRCode(ctx, chatID, res.RegistrationID, event)
+	}
+}
+
+// sendQRCode генерирует attendance_code (если ещё нет), сохраняет в БД и шлёт PNG.
+//
+// Алгоритм:
+//  1. Get(regID) — актуальная запись;
+//  2. если attendance_code пустой → NewAttendanceCode + SetAttendanceCode;
+//  3. GenerateQRPNG → пишем во временный файл (Uploads принимает filepath);
+//  4. UploadPhotoFromFile → AddPhoto → SendWithResult.
+//
+// Если что-то пошло не так — логируем и продолжаем; пользователь уже получил
+// текстовое подтверждение, отсутствие QR не блокирует регистрацию.
+func (h *RegistrationHandler) sendQRCode(ctx context.Context, chatID, regID int64, event *domain.Event) {
+	reg, err := h.regsRepo.Get(ctx, h.db, regID)
+	if err != nil || reg == nil {
+		h.log.Warn("qr: get reg failed", "err", err, "reg_id", regID)
+		return
+	}
+
+	var code string
+	if reg.AttendanceCode != nil && *reg.AttendanceCode != "" {
+		code = *reg.AttendanceCode
+	} else {
+		code = h.qr.NewAttendanceCode()
+		if err := h.regsRepo.SetAttendanceCode(ctx, h.db, regID, code); err != nil {
+			h.log.Error("qr: set attendance_code failed", "err", err)
+			return
+		}
+	}
+
+	payload := h.qr.BuildQRPayload(reg.EventID, code)
+	png, err := h.qr.GenerateQRPNG(payload)
+	if err != nil {
+		h.log.Error("qr: generate png failed", "err", err)
+		return
+	}
+
+	fname := filepath.Join(os.TempDir(), "max_qr_"+code+".png")
+	if err := os.WriteFile(fname, png, 0o600); err != nil {
+		h.log.Error("qr: write tmp failed", "err", err)
+		return
+	}
+	defer func() { _ = os.Remove(fname) }()
+
+	photo, err := h.api.Raw().Uploads.UploadPhotoFromFile(ctx, fname)
+	if err != nil {
+		h.log.Error("qr: upload failed", "err", err)
+		return
+	}
+
+	msg := maxbot.NewMessage().SetChat(chatID).
+		SetText(messages.QRCaption(event)).
+		AddPhoto(photo)
+
+	if _, err := h.api.Raw().Messages.SendWithResult(ctx, msg); err != nil {
+		h.log.Warn("qr: send photo failed", "err", err)
 	}
 }
 

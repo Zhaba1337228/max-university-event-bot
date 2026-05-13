@@ -184,11 +184,60 @@
 
 ---
 
-## Дни 13-20 ⬜
+## День 13 — backend admin REST API + JWT auth ✅
 
-- [ ] **День 13** — backend admin REST API + JWT auth
-- [ ] **День 14** — frontend Next.js: bootstrap, auth, dashboard, events, participants
-- [ ] **День 15** — QR-коды в боте, страница check-in, AI rewrite в админке
+- [x] service/auth.go — Auth interface:
+  - IssueMagic (5 мин, purpose=magic, доступ только organizer/admin → ErrAccessDenied)
+  - IssueSession (12 ч, purpose=session, роль из БД)
+  - VerifyMagic / VerifySession (сверка роли в БД на каждом запросе → ErrAuthRoleChanged)
+  - HS256, ID=uuid.NewString(), ExpirationRequired в parser
+- [x] internal/transport/adminapi/ — chi-роутер на :8081:
+  - server.go: Deps + middleware chain (RequestID, recover, slogLogger
+    БЕЗ query/body для PII, securityHeaders, CORS только из ADMIN_WEB_BASE_URL)
+  - middleware.go: requireSession (cookie sid), originGuard для mutating,
+    statusRecorder, writeJSON/errResp
+  - handlers.go: /api/auth/exchange|logout|me, /api/events?status=open|mine,
+    /api/events/:id (+ stats), /api/events/:id/participants (поиск/пагинация),
+    /api/events/:id/open|close|broadcast, /api/checkin, /api/dashboard, /api/healthz
+  - DTO с маскировкой full_name (Иванов И.) и contact
+- [x] handlers/admin_login.go — /admin_login в боте:
+  - IssueMagic → inline-кнопка-ссылка ${WebBaseURL}/auth?t=<jwt>
+  - На applicant — AdminLoginNoAccess + main menu
+  - Если ADMIN_SESSION_KEY не задан — handler пропускается через `if h.AdminLogin != nil`
+- [x] app/app.go запускает adminAPI параллельно long-polling (только если authSvc != nil)
+
+---
+
+## День 14 — frontend Next.js ⬜ (отложено: пользователь выбрал «без фронта»)
+
+См. план §21A. REST API готов и проверяется через curl/Postman.
+Если потом нужен фронт — он будет потреблять уже-готовые endpoints.
+
+---
+
+## День 15 — QR-коды в боте + страница check-in ✅ (бот-часть)
+
+- [x] service/qr.go — QR interface:
+  - NewAttendanceCode (uuid v4 hex без дефисов, 32 символа, 128 бит энтропии)
+  - BuildQRPayload (MAXUEB:<eventID>:<code>) + ParseQRPayload (с ErrQRInvalidPrefix/Format)
+  - GenerateQRPNG (skip2/go-qrcode, Medium recovery, 512px)
+- [x] service/attendance.go — Attendance interface:
+  - CheckIn в транзакции RepeatableRead с GetByCodeForUpdate
+  - Проверки: parsed.EventID == reg.EventID, RequireEventOwner, status active,
+    окно [starts_at-2h, ends_at+4h]
+  - MarkAttended + ActionLog checkin_scanned
+  - На повторный скан → AlreadyDone=true (не ошибка)
+- [x] handlers/registration.go::sendQRCode после успешной registered-записи:
+  - NewAttendanceCode → SetAttendanceCode в БД
+  - GenerateQRPNG → tmpfile → UploadPhotoFromFile → SendWithResult
+  - Все ошибки логируются но не блокируют регистрацию
+- [x] POST /api/checkin endpoint работает с реальными QR из бота
+- [ ] **frontend страница checkin** — отложено вместе с Днём 14
+
+---
+
+## Дни 16-20 ⬜
+
 - [ ] **День 16** — AI-сервисы (GigaChat) + scheduler с reminders
 - [ ] **День 17** — обработка ошибок и устойчивость, rate-limit per user
 - [ ] **День 18** — webhook-режим и полировка демо

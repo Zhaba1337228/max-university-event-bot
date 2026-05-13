@@ -35,6 +35,7 @@ type Handlers struct {
 	Organizer     *handlers.OrganizerHandler
 	OrganizerList *handlers.OrganizerListHandler
 	OrgNotify     *handlers.OrganizerNotifyHandler
+	AdminLogin    *handlers.AdminLoginHandler
 }
 
 // HandlersConfig — групповая инициализация. По мере роста зависимостей удобнее
@@ -49,10 +50,13 @@ type HandlersConfig struct {
 	ActionLogs      service.ActionLog
 	Role            service.Role
 	Notification    service.Notification
+	Auth            service.Auth
+	QR              service.QR
 	RegsRepo        repo.RegistrationRepo
 	DB              repo.Querier
 	WaitlistEnabled bool
 	PolicyVersion   string
+	WebBaseURL      string
 }
 
 // NewHandlers собирает Handlers по конфигу.
@@ -65,7 +69,9 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 	h.Fallback = handlers.NewFallbackHandler(cfg.API, cfg.FSM, cfg.Log)
 	h.Events = handlers.NewEventsHandler(cfg.API, cfg.FSM, cfg.Events, cfg.Log, cfg.WaitlistEnabled)
 	h.Registration = handlers.NewRegistrationHandler(cfg.API, cfg.FSM,
-		cfg.Registration, cfg.Users, cfg.Events, cfg.Log, cfg.PolicyVersion)
+		cfg.Registration, cfg.Users, cfg.Events,
+		cfg.QR, cfg.RegsRepo, cfg.DB,
+		cfg.Log, cfg.PolicyVersion)
 	h.MyReg = handlers.NewMyRegistrationHandler(cfg.API, cfg.FSM,
 		cfg.Users, cfg.Registration, cfg.Events, cfg.ActionLogs, cfg.Log)
 	h.Cancel = handlers.NewCancelHandler(cfg.API, cfg.FSM,
@@ -76,6 +82,9 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 		cfg.Events, cfg.RegsRepo, cfg.DB, cfg.Log)
 	h.OrgNotify = handlers.NewOrganizerNotifyHandler(cfg.API, cfg.FSM, cfg.Role,
 		cfg.Events, cfg.Notification, cfg.RegsRepo, cfg.DB, cfg.Log)
+	if cfg.Auth != nil {
+		h.AdminLogin = handlers.NewAdminLoginHandler(cfg.API, cfg.Auth, cfg.WebBaseURL, cfg.Log)
+	}
 	return h
 }
 
@@ -99,6 +108,13 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 		return
 	case "/organizer":
 		h.Organizer.OnEntryCmd(ctx, upd)
+		return
+	case "/admin_login":
+		if h.AdminLogin != nil {
+			h.AdminLogin.OnCmd(ctx, upd)
+		} else {
+			h.Fallback.OnText(ctx, upd)
+		}
 		return
 	}
 

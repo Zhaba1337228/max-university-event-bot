@@ -14,6 +14,7 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/repo"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/transport/adminapi"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/transport/longpoll"
 )
 
@@ -38,6 +39,7 @@ type App struct {
 
 	dispatcher *bot.Dispatcher
 	longpoll   *longpoll.Runner
+	adminAPI   *adminapi.Server
 
 	updates chan schemes.UpdateInterface
 }
@@ -106,6 +108,16 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	notifSvc := service.NewNotification(pool, notifsRepo, regsRepo, eventsRepo,
 		usersRepo, logsRepo, mc, cfg.Business.NotifyRateLimitRPS, cfg.Business.NotifyBatchSize, log)
 
+	// Day 13: auth + QR + attendance сервисы.
+	// Auth работает только если задан ADMIN_SESSION_KEY (см. config.Validate);
+	// иначе AdminLogin-handler в боте сам молча скажет "не настроено".
+	var authSvc service.Auth
+	if cfg.Admin.SessionKey != "" {
+		authSvc = service.NewAuth(pool, usersRepo, cfg.Admin.SessionKey)
+	}
+	qrSvc := service.NewQR()
+	attendSvc := service.NewAttendance(pool, qrSvc, regsRepo, eventsRepo, usersRepo, roleSvc, logsRepo)
+
 	// 6. Handlers + Dispatcher + Long-poll runner
 	handlers := bot.NewHandlers(bot.HandlersConfig{
 		API:             mc,
@@ -117,11 +129,37 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 		ActionLogs:      actionLogSvc,
 		Role:            roleSvc,
 		Notification:    notifSvc,
+		Auth:            authSvc,
+		QR:              qrSvc,
 		RegsRepo:        regsRepo,
 		DB:              pool,
 		WaitlistEnabled: cfg.Business.WaitlistEnabled,
 		PolicyVersion:   cfg.Policy.PrivacyPolicyVersion,
+		WebBaseURL:      cfg.Admin.WebBaseURL,
 	})
+
+	// Day 13: admin REST API на отдельном порту, только если задан ADMIN_SESSION_KEY.
+	if authSvc != nil {
+		a.adminAPI = adminapi.New(adminapi.Config{
+			Addr:         cfg.Admin.APIAddr,
+			WebBaseURL:   cfg.Admin.WebBaseURL,
+			ReadTimeout:  cfg.HTTP.ReadTimeout,
+			WriteTimeout: cfg.HTTP.WriteTimeout,
+		}, log, adminapi.Deps{
+			Auth:         authSvc,
+			Events:       eventSvc,
+			Registration: regSvc,
+			Users:        userSvc,
+			Role:         roleSvc,
+			Notification: notifSvc,
+			Attendance:   attendSvc,
+			ActionLogs:   actionLogSvc,
+			RegsRepo:     regsRepo,
+			UsersRepo:    usersRepo,
+			EventsRepo:   eventsRepo,
+			DB:           pool,
+		})
+	}
 	a.dispatcher = bot.NewDispatcher(log, handlers, 32)
 	a.longpoll = longpoll.New(mc, log)
 	a.updates = make(chan schemes.UpdateInterface, 256)
@@ -130,21 +168,42 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 }
 
 // Run запускает все рантайм-компоненты. Блокируется до ctx.Done()
-// или фатальной ошибки. На день 4 поддерживается только long-polling.
+// или фатальной ошибки. На день 4 поддерживается только long-polling
+// для приёма обновлений MAX. С Дня 13 параллельно поднимается admin REST API.
 func (a *App) Run(ctx context.Context) error {
+	// Dispatcher всегда нужен — обрабатывает входящие апдейты.
+	go a.dispatcher.Run(ctx, a.updates)
+
+	// Admin REST API (опционален; запускается только при ADMIN_SESSION_KEY).
+	apiErrCh := make(chan error, 1)
+	if a.adminAPI != nil {
+		go func() {
+			if err := a.adminAPI.Run(ctx); err != nil {
+				apiErrCh <- err
+			} else {
+				apiErrCh <- nil
+			}
+		}()
+	}
+
 	switch a.cfg.Max.Mode {
 	case "longpoll":
-		// Dispatcher и Long-poll Runner работают параллельно.
-		// Когда ctx закроется — оба завершатся, longpoll закроет за нас канал.
-		go a.dispatcher.Run(ctx, a.updates)
+		// Long-poll работает в основной горутине; завершится при ctx.Done().
 		a.longpoll.Run(ctx, a.updates)
-		return nil
 	case "webhook":
 		// День 18 — webhook сервер на :8080.
 		return errors.New("webhook mode is not implemented yet (день 18)")
 	default:
 		return fmt.Errorf("unsupported mode: %s", a.cfg.Max.Mode)
 	}
+
+	// Дождёмся завершения admin API (если он был запущен).
+	if a.adminAPI != nil {
+		if err := <-apiErrCh; err != nil {
+			return fmt.Errorf("admin api: %w", err)
+		}
+	}
+	return nil
 }
 
 // Shutdown освобождает ресурсы. Безопасно вызывать многократно.
