@@ -29,6 +29,8 @@ type Handlers struct {
 	Events       *handlers.EventsHandler
 	Registration *handlers.RegistrationHandler
 	MyReg        *handlers.MyRegistrationHandler
+	Cancel       *handlers.CancelHandler
+	Waitlist     *handlers.WaitlistHandler
 }
 
 // HandlersConfig — групповая инициализация. По мере роста зависимостей удобнее
@@ -55,7 +57,11 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 	h.Events = handlers.NewEventsHandler(cfg.API, cfg.FSM, cfg.Events, cfg.Log, cfg.WaitlistEnabled)
 	h.Registration = handlers.NewRegistrationHandler(cfg.API, cfg.FSM,
 		cfg.Registration, cfg.Users, cfg.Events, cfg.Log, cfg.PolicyVersion)
-	h.MyReg = handlers.NewMyRegistrationHandler(cfg.API, cfg.FSM, cfg.Users, cfg.Log)
+	h.MyReg = handlers.NewMyRegistrationHandler(cfg.API, cfg.FSM,
+		cfg.Users, cfg.Registration, cfg.Events, cfg.Log)
+	h.Cancel = handlers.NewCancelHandler(cfg.API, cfg.FSM,
+		cfg.Registration, cfg.Users, cfg.Events, cfg.Log)
+	h.Waitlist = handlers.NewWaitlistHandler(cfg.API, cfg.FSM, h.Registration, cfg.Log)
 	return h
 }
 
@@ -98,7 +104,7 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 
 // RouteCallback маршрутизирует MessageCallbackUpdate по группе payload'а.
 //
-// Группы, для которых ещё нет реального handler'а (дни 7-12), уходят в
+// Группы, для которых ещё нет реального handler'а (дни 10-12), уходят в
 // Fallback с понятным сообщением «Эта кнопка устарела».
 func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallbackUpdate) {
 	p := callbacks.Parse(upd.Callback.Payload)
@@ -111,8 +117,12 @@ func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallba
 		h.Registration.OnCallback(ctx, upd, p)
 	case callbacks.GroupMy:
 		h.MyReg.OnCallback(ctx, upd, p)
+	case callbacks.GroupCancel:
+		h.Cancel.OnCallback(ctx, upd, p)
+	case callbacks.GroupWaitlist:
+		h.Waitlist.OnCallback(ctx, upd, p)
 	default:
-		// Дни 7-12: cancel/wl/org/orglist/orgnotif/orgclose/admin/ai
+		// Дни 10-12: org/orglist/orgnotif/orgclose/admin/ai
 		h.Fallback.OnCallback(ctx, upd, p)
 	}
 }

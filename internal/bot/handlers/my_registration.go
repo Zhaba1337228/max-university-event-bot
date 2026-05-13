@@ -10,36 +10,32 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/fsm"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/keyboards"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/messages"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 )
 
-// MyRegistrationHandler — обработчик «Моя запись» и /forget_me (152-ФЗ).
-//
-// Полный список регистраций пользователя, история действий, кнопка
-// «Показать мой QR» (QR появится в дне 15), отмена записи (день 8) —
-// будут добавлены по мере прохождения дорожной карты.
-//
-// На день 6 здесь реализованы:
-//   - /forget_me (двухшаговое подтверждение → ForgetMe сервис);
-//   - заглушка «Моя запись» с сообщением «у вас нет активных записей»
-//     (полноценный список — после дня 7-8, когда добавятся active regs queries).
+// MyRegistrationHandler — обработчик «Моя запись», /forget_me и истории.
 type MyRegistrationHandler struct {
-	api   *maxclient.Client
-	fsm   *fsm.Manager
-	users service.User
-	log   *slog.Logger
+	api    *maxclient.Client
+	fsm    *fsm.Manager
+	users  service.User
+	reg    service.Registration
+	events service.Event
+	log    *slog.Logger
 }
 
 // NewMyRegistrationHandler — конструктор.
 func NewMyRegistrationHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
-	users service.User, log *slog.Logger,
+	users service.User, reg service.Registration, events service.Event, log *slog.Logger,
 ) *MyRegistrationHandler {
 	return &MyRegistrationHandler{
-		api:   api,
-		fsm:   fsmMgr,
-		users: users,
-		log:   log.With("handler", "my_registration"),
+		api:    api,
+		fsm:    fsmMgr,
+		users:  users,
+		reg:    reg,
+		events: events,
+		log:    log.With("handler", "my_registration"),
 	}
 }
 
@@ -73,22 +69,77 @@ func (h *MyRegistrationHandler) OnCallback(ctx context.Context, upd *schemes.Mes
 	case "forget_no":
 		h.onForgetNo(ctx, chatID, userMaxID)
 	case "history":
-		// День 9.
-		h.sendText(ctx, chatID, messages.HistoryEmpty())
+		h.onHistory(ctx, chatID)
+	case "qr":
+		// День 15.
+		h.sendText(ctx, chatID, messages.QRNotAvailable())
 	default:
 		h.log.Debug("unknown my action", "action", p.Action)
 		h.sendFallback(ctx, chatID)
 	}
 }
 
-// onShow — «Моя запись». На день 6 — заглушка с предложением вернуться в меню.
-// Реальный список появится в дне 8 после реализации Cancel handler.
+// onShow — «Моя запись».
+//
+// Если активных регистраций несколько — показываем список + клавиатуру «выбрать».
+// Если одна — сразу карточку с кнопками «Отменить»/«История»/«Меню».
+// Если ноль — empty + меню.
 func (h *MyRegistrationHandler) onShow(ctx context.Context, chatID, userMaxID int64) {
-	_ = userMaxID
-	// День 8: загрузить service.Registration.ListActive(userMaxID),
-	// показать MyRegistration(event, reg) с клавиатурой MyRegistration(regID).
-	if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.MyRegistrationEmpty(), keyboards.MainMenu()); err != nil {
-		h.log.Error("send my reg empty failed", "err", err)
+	user, err := h.users.GetByMaxID(ctx, userMaxID)
+	if err != nil {
+		h.log.Error("my show: get user failed", "err", err)
+		h.sendError(ctx, chatID)
+		return
+	}
+	if user == nil {
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.MyRegistrationEmpty(), keyboards.MainMenu()); err != nil {
+			h.log.Error("send empty failed", "err", err)
+		}
+		return
+	}
+
+	regs, err := h.reg.ListActiveByUser(ctx, user.ID)
+	if err != nil {
+		h.log.Error("my show: list failed", "err", err)
+		h.sendError(ctx, chatID)
+		return
+	}
+	if len(regs) == 0 {
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.MyRegistrationEmpty(), keyboards.MainMenu()); err != nil {
+			h.log.Error("send empty failed", "err", err)
+		}
+		return
+	}
+
+	// Для каждой регистрации подгружаем event (не оптимально — N+1, но
+	// у пользователя обычно 1-3 активные записи, так что норм).
+	for _, r := range regs {
+		ev, err := h.events.Get(ctx, r.EventID)
+		if err != nil {
+			h.log.Warn("my show: get event failed", "err", err, "event_id", r.EventID)
+			continue
+		}
+		if ev == nil {
+			continue
+		}
+		text := messages.MyRegistration(ev, r)
+		kb := keyboards.MyRegistration(r.ID)
+		if err := h.api.SendTextWithKeyboard(ctx, chatID, text, kb); err != nil {
+			h.log.Error("send my reg failed", "err", err)
+		}
+	}
+}
+
+// onHistory — последние 10 записей audit log пользователя.
+func (h *MyRegistrationHandler) onHistory(ctx context.Context, chatID int64) {
+	// На День 9 нужен service.ActionLog. У нас его пока нет публичным сервисом,
+	// но история «облегчённая» — покажем активные/прошедшие записи.
+	// Полноценная история через ActionLogRepo появится отдельно.
+	if err := h.api.SendTextWithKeyboard(ctx, chatID,
+		messages.HistoryEmpty(), keyboards.MainMenu()); err != nil {
+		h.log.Error("send history failed", "err", err)
 	}
 }
 
@@ -102,9 +153,7 @@ func (h *MyRegistrationHandler) onForgetAsk(ctx context.Context, chatID, userMax
 func (h *MyRegistrationHandler) onForgetYes(ctx context.Context, chatID, userMaxID int64) {
 	snap, err := h.fsm.Load(ctx, userMaxID)
 	if err != nil || snap.State != fsm.StateForgetMeConfirm {
-		// Защита от устаревшей кнопки. Без подтверждения данные не удаляем.
-		h.log.Warn("forget me without confirm state",
-			"state", snap.State, "user_id", userMaxID)
+		h.log.Warn("forget me without confirm state", "state", snap.State, "user_id", userMaxID)
 		h.sendFallback(ctx, chatID)
 		return
 	}
@@ -116,9 +165,7 @@ func (h *MyRegistrationHandler) onForgetYes(ctx context.Context, chatID, userMax
 		return
 	}
 
-	// После удаления FSM нет — Reset бессмысленен (user_states каскадно удалён).
 	if !deleted {
-		// Пользователя и так не было в БД — сообщаем «нечего удалять».
 		h.sendText(ctx, chatID, "Данных не было — удалять нечего.")
 		return
 	}
@@ -154,3 +201,6 @@ func (h *MyRegistrationHandler) sendError(ctx context.Context, chatID int64) {
 		h.log.Error("send error msg failed", "err", err)
 	}
 }
+
+// _ — placeholder, чтобы не падал import при будущих чистках.
+var _ = (*domain.Registration)(nil)

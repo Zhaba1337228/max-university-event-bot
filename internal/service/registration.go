@@ -30,6 +30,21 @@ type RegisterResult struct {
 	Position       int // позиция в очереди (только для IsWaitlist=true)
 }
 
+// CancelBy — кто инициирует отмену.
+type CancelBy string
+
+const (
+	CancelByUser      CancelBy = "user"
+	CancelByOrganizer CancelBy = "organizer"
+)
+
+// PromoteResult — что произошло при попытке продвинуть очередь.
+type PromoteResult struct {
+	PromotedRegistrationID int64 // 0 если очередь пуста / нет места
+	PromotedUserID         int64
+	Promoted               bool
+}
+
 // Registration — сервис регистрации на мероприятия.
 type Registration interface {
 	// Register выполняет полный сценарий:
@@ -42,6 +57,28 @@ type Registration interface {
 	//        4.3 если включён waitlist → Create(status=waitlist, position) + ActionLog
 	//        4.4 иначе               → ErrNoSeats
 	Register(ctx context.Context, in RegisterInput) (*RegisterResult, error)
+
+	// JoinWaitlist напрямую добавляет в лист ожидания, минуя проверку capacity.
+	// Используется когда карточка события показала «мест нет, встать в очередь».
+	// Сам Register сделает это автоматически если capacity исчерпана и
+	// waitlist включён; но если пользователь дошёл до карточки до consent —
+	// он сначала пройдёт consent, потом сразу попадёт в waitlist.
+	//
+	// Возвращает ErrWaitlistDisabled, если бизнес-флаг отключён.
+	JoinWaitlist(ctx context.Context, in RegisterInput) (*RegisterResult, error)
+
+	// Cancel — отмена активной (registered/waitlist) записи.
+	// by определяет статус: cancelled_by_user | cancelled_by_organizer.
+	// Возвращает ErrNotRegistered если активной записи нет.
+	// После успешной отмены registered-записи пытается продвинуть waitlist:
+	// promote-результат — отдельный возврат (может быть Promoted=false).
+	Cancel(ctx context.Context, regID int64, by CancelBy) (*PromoteResult, error)
+
+	// ListActiveByUser возвращает активные записи пользователя (для «Моя запись»).
+	ListActiveByUser(ctx context.Context, userID int64) ([]*domain.Registration, error)
+
+	// GetActive возвращает активную запись пары (user, event) или nil.
+	GetActive(ctx context.Context, userID, eventID int64) (*domain.Registration, error)
 }
 
 type registrationService struct {
@@ -193,6 +230,133 @@ func (s *registrationService) Register(ctx context.Context, in RegisterInput) (*
 		return nil, err
 	}
 	return result, nil
+}
+
+// JoinWaitlist — пользователь нажал «Встать в лист ожидания».
+// Делает то же что и Register, но если есть свободные места — всё равно
+// создаёт registered (пользователю это лучше, чем стоять в очереди впустую).
+func (s *registrationService) JoinWaitlist(ctx context.Context, in RegisterInput) (*RegisterResult, error) {
+	if !s.waitlistEnabled {
+		return nil, ErrWaitlistDisabled
+	}
+	return s.Register(ctx, in)
+}
+
+// Cancel — отмена активной записи. by определяет статус.
+//
+// Если отменяемая запись была registered и места освободились — пытаемся
+// продвинуть очередь: переводим первого waitlist-пользователя в registered
+// (т.е. промоут «без подтверждения»). Это упрощение MVP — план §23 День 8
+// допускает оба варианта (auto или с подтверждением). Здесь auto.
+func (s *registrationService) Cancel(ctx context.Context, regID int64, by CancelBy) (*PromoteResult, error) {
+	var promoted *PromoteResult
+
+	err := s.inTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		reg, err := s.regs.Get(ctx, tx, regID)
+		if err != nil {
+			return fmt.Errorf("load registration: %w", err)
+		}
+		if reg == nil || !reg.Status.IsActive() {
+			return ErrNotRegistered
+		}
+
+		// Блокируем строку события на запись (чтобы capacity-счётчик не съехал).
+		ev, err := s.events.GetForUpdate(ctx, tx, reg.EventID)
+		if err != nil {
+			return fmt.Errorf("for update event: %w", err)
+		}
+		if ev == nil {
+			return ErrEventNotFound
+		}
+
+		// Меняем статус на cancelled_by_user / cancelled_by_organizer.
+		newStatus := domain.RegStatusCancelledByUser
+		actionType := domain.ActionRegistrationCancelledUser
+		if by == CancelByOrganizer {
+			newStatus = domain.RegStatusCancelledByOrganizer
+			actionType = domain.ActionRegistrationCancelledOrg
+		}
+		if err := s.regs.UpdateStatus(ctx, tx, reg.ID, newStatus); err != nil {
+			return fmt.Errorf("update status: %w", err)
+		}
+		s.logAction(ctx, tx, actionType, reg.UserID, reg.EventID, reg.ID, nil)
+
+		// Если отмена waitlist-записи — продвигать ничего не нужно (мест не освободилось).
+		if reg.Status != domain.RegStatusRegistered {
+			return nil
+		}
+		if !s.waitlistEnabled {
+			return nil
+		}
+
+		// Пробуем продвинуть первого waitlist-пользователя в registered.
+		next, err := s.regs.NextWaitlist(ctx, tx, reg.EventID)
+		if err != nil {
+			return fmt.Errorf("next waitlist: %w", err)
+		}
+		if next == nil {
+			return nil
+		}
+
+		// Проверим что место реально освободилось (defensive — конкурирующая
+		// регистрация могла занять его до нас).
+		registered, err := s.regs.CountByEvent(ctx, tx, ev.ID, domain.RegStatusRegistered)
+		if err != nil {
+			return fmt.Errorf("count registered: %w", err)
+		}
+		attended, err := s.regs.CountByEvent(ctx, tx, ev.ID, domain.RegStatusAttended)
+		if err != nil {
+			return fmt.Errorf("count attended: %w", err)
+		}
+		if registered+attended >= ev.Capacity {
+			return nil
+		}
+
+		if err := s.regs.UpdateStatus(ctx, tx, next.ID, domain.RegStatusRegistered); err != nil {
+			return fmt.Errorf("promote update: %w", err)
+		}
+		// Снимаем waitlist_position, чтобы счётчик очереди не считал его.
+		// repo.AssignWaitlistPosition с nil не поддерживается — пишем SQL напрямую.
+		if _, err := tx.Exec(ctx,
+			`UPDATE registrations SET waitlist_position = NULL,
+                registered_at = COALESCE(registered_at, NOW()),
+                updated_at = NOW() WHERE id = $1`, next.ID); err != nil {
+			return fmt.Errorf("clear waitlist position: %w", err)
+		}
+
+		s.logAction(ctx, tx, domain.ActionWaitlistPromoted, next.UserID, ev.ID, next.ID, nil)
+		promoted = &PromoteResult{
+			PromotedRegistrationID: next.ID,
+			PromotedUserID:         next.UserID,
+			Promoted:               true,
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if promoted == nil {
+		return &PromoteResult{Promoted: false}, nil
+	}
+	return promoted, nil
+}
+
+// ListActiveByUser — список активных записей пользователя (registered+waitlist).
+func (s *registrationService) ListActiveByUser(ctx context.Context, userID int64) ([]*domain.Registration, error) {
+	out, err := s.regs.ListByUser(ctx, s.pool, userID, true)
+	if err != nil {
+		return nil, fmt.Errorf("list active by user: %w", err)
+	}
+	return out, nil
+}
+
+// GetActive — точечный поиск активной записи пары.
+func (s *registrationService) GetActive(ctx context.Context, userID, eventID int64) (*domain.Registration, error) {
+	r, err := s.regs.GetActiveByUserEvent(ctx, s.pool, userID, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("get active: %w", err)
+	}
+	return r, nil
 }
 
 // inTx — открывает транзакцию RepeatableRead для гарантии того, что
