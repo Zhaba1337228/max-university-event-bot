@@ -11,9 +11,9 @@
 //   - ADMIN_WEB_BASE_URL — база URL веб-админки (default: http://localhost:3000).
 //
 // Пользователь должен заранее существовать в БД и быть organizer/admin.
-// Если нет — засеять через psql:
+// Если нет — засеять через psql (схема: migrations/20260101000001_init_users.sql):
 //
-//	INSERT INTO users(max_user_id, role, status) VALUES (999999, 'organizer', 'active');
+//	INSERT INTO users(max_user_id, role) VALUES (999999, 'organizer');
 package main
 
 import (
