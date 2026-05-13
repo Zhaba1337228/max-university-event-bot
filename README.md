@@ -93,6 +93,8 @@ make docker-up       # docker compose up -d --build
 6. Рассылка с AI-улучшением текста → подтверждение → доставка.
 7. На странице check-in отсканировать QR с телефона участника → отметка `attended`.
 
+Подробный пошаговый сценарий для жюри (минимальный `.env`, абитуриент / организатор / веб-админка, поведение при выключенном GigaChat, known issues) — [`docs/demo_walkthrough.md`](./docs/demo_walkthrough.md). Шпаргалка эксплуатации (логи, роли organizer'ов, ротация секретов `ADMIN_SESSION_KEY` / `GIGACHAT_AUTH_KEY`, восстановление подписки на webhook после 8-часового простоя MAX, реакция на запросы 152-ФЗ) — [`docs/runbook.md`](./docs/runbook.md).
+
 ## Безопасность
 
 - Stateless JWT с httpOnly cookie, без серверных таблиц сессий.
