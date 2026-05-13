@@ -3,13 +3,15 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, HttpError } from "@/lib/api";
+import { Me, canCheckin } from "@/lib/types";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 // /auth?t=<magic-jwt>
 // 1. читаем t из query
 // 2. POST /api/auth/exchange — backend ставит cookie session_jwt
-// 3. редирект на /dashboard
+// 3. подтягиваем /api/auth/me, чтобы знать роль
+// 4. редирект: staff → /checkin, остальные → /dashboard
 export default function AuthExchangePage() {
   return (
     <Suspense fallback={<Loading />}>
@@ -49,7 +51,14 @@ function Exchange() {
     (async () => {
       try {
         await api.post("/api/auth/exchange", { t: token });
-        router.replace("/dashboard");
+        // Узнаём роль, чтобы отправить staff сразу на сканер, а organizer/admin — на дашборд.
+        try {
+          const me = await api.get<Me>("/api/auth/me");
+          const dest = me.user.role === "staff" && canCheckin(me.user.role) ? "/checkin" : "/dashboard";
+          router.replace(dest);
+        } catch {
+          router.replace("/dashboard");
+        }
       } catch (e) {
         const msg =
           e instanceof HttpError && e.body?.message

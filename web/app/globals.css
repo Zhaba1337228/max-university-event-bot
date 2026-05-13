@@ -6,8 +6,10 @@
   html,
   body {
     background-color: #0b0d12;
-    color: #e6e8ee;
+    color: #f1f4fb;
     min-height: 100vh;
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
   }
   body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -15,18 +17,44 @@
     line-height: 1.5;
   }
   a {
-    color: #7c5cff;
+    color: #b9a8ff;
   }
   a:hover {
-    color: #9b85ff;
+    color: #d3c5ff;
+  }
+  /* На вход всегда удобный фокус-ринг (доступность). */
+  :focus-visible {
+    outline: 2px solid #7c5cff;
+    outline-offset: 2px;
+    border-radius: 6px;
   }
 }
 
 @layer components {
+  /* Контейнер: на мобиле уменьшаем боковые отступы, чтобы карточки не съёживались. */
   .container {
     width: 100%;
-    max-width: 980px;
+    max-width: 1200px;
     margin: 0 auto;
-    padding: 0 16px;
+    padding: 0 12px;
+  }
+  @media (min-width: 640px) {
+    .container {
+      padding: 0 20px;
+    }
+  }
+  @media (min-width: 1024px) {
+    .container {
+      padding: 0 28px;
+    }
+  }
+}
+
+@layer utilities {
+  /* Адаптивная типографика для заголовков (необязательная — не везде применяем). */
+  .text-heading {
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
   }
 }

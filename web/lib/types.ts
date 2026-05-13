@@ -1,11 +1,37 @@
 // DTO-типы, отзеркаленные с adminapi/handlers.go.
 // Менять синхронно с бэком.
 
-export type Role = "applicant" | "organizer" | "admin";
+export type Role = "applicant" | "organizer" | "staff" | "admin";
 
 export type Me = {
   user: { id: number; role: Role };
 };
+
+// roleLabel — короткая русская подпись роли для UI.
+export function roleLabel(r: Role): string {
+  switch (r) {
+    case "admin":
+      return "Администратор";
+    case "organizer":
+      return "Организатор";
+    case "staff":
+      return "Волонтёр (check-in)";
+    default:
+      return r;
+  }
+}
+
+// canCheckin — может ли пользователь делать check-in (сканировать QR).
+// Организатор НЕ может — он создаёт события, но не сканирует гостей.
+export function canCheckin(r: Role): boolean {
+  return r === "staff" || r === "admin";
+}
+
+// canManageEvents — может ли пользователь видеть дашборд и список мероприятий.
+// Staff НЕ может — у него только сканер.
+export function canManageEvents(r: Role): boolean {
+  return r === "organizer" || r === "admin";
+}
 
 export type EventStatus = "draft" | "open" | "closed" | "cancelled" | "completed";
 

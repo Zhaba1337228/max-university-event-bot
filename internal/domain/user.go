@@ -7,10 +7,16 @@ import "time"
 // Role — роль пользователя в системе.
 type Role string
 
-// Возможные роли. Применяется RBAC: organizer/admin защищены RequireEventOwner.
+// Возможные роли. Применяется RBAC.
+//
+//   - applicant — обычный посетитель/абитуриент, только бот
+//   - organizer — может создавать и вести события (web-админка), но НЕ сканирует QR
+//   - staff — волонтёр на входе: имеет доступ только к /checkin (сканеру), не видит организаторских разделов
+//   - admin — все права: organizer + staff + управление пользователями
 const (
 	RoleApplicant Role = "applicant"
 	RoleOrganizer Role = "organizer"
+	RoleStaff     Role = "staff"
 	RoleAdmin     Role = "admin"
 )
 
@@ -39,12 +45,24 @@ func (u *User) HasConsent() bool {
 }
 
 // IsOrganizer сообщает, может ли пользователь работать с организаторской панелью.
-// Admin всегда имеет доступ.
+// Admin всегда имеет доступ. Staff НЕ имеет.
 func (u *User) IsOrganizer() bool {
 	return u != nil && (u.Role == RoleOrganizer || u.Role == RoleAdmin)
+}
+
+// IsStaff сообщает, может ли пользователь делать check-in (сканировать QR).
+// Admin всегда имеет доступ. Organizer — нет: он не сканирует QR-коды гостей.
+func (u *User) IsStaff() bool {
+	return u != nil && (u.Role == RoleStaff || u.Role == RoleAdmin)
 }
 
 // IsAdmin сообщает, является ли пользователь администратором.
 func (u *User) IsAdmin() bool {
 	return u != nil && u.Role == RoleAdmin
+}
+
+// CanAccessAdminPanel — может ли пользователь войти в веб-админку
+// (любая роль кроме applicant).
+func (u *User) CanAccessAdminPanel() bool {
+	return u != nil && (u.IsOrganizer() || u.IsStaff())
 }

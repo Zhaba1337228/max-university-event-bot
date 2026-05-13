@@ -82,13 +82,13 @@ export default function ParticipantsPage() {
           </CardTitle>
         </CardHeader>
         <CardBody>
-          <form onSubmit={onSearch} className="mb-4 flex gap-2">
+          <form onSubmit={onSearch} className="mb-4 flex flex-col gap-2 sm:flex-row">
             <Input
               placeholder="Поиск по ФИО или контакту"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-            <Button type="submit" variant="primary">
+            <Button type="submit" variant="primary" className="sm:w-auto">
               Найти
             </Button>
           </form>
@@ -98,30 +98,65 @@ export default function ParticipantsPage() {
           ) : items.length === 0 ? (
             <p className="text-subtle">Никого не найдено.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border text-subtle">
-                    <th className="py-2 pr-3 font-medium">ФИО</th>
-                    <th className="py-2 pr-3 font-medium">Контакт</th>
-                    <th className="py-2 pr-3 font-medium">Интерес</th>
-                    <th className="py-2 pr-3 font-medium">Записан</th>
-                    <th className="py-2 pr-3 font-medium">Check-in</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((r) => (
-                    <tr key={r.id} className="border-b border-border/60 last:border-b-0">
-                      <td className="py-2 pr-3">{r.full_name_masked}</td>
-                      <td className="py-2 pr-3 font-mono text-xs">{r.contact_masked}</td>
-                      <td className="py-2 pr-3">{r.interest_program || "—"}</td>
-                      <td className="py-2 pr-3">{fmtDate(r.registered_at)}</td>
-                      <td className="py-2 pr-3">{r.checkin_at ? fmtDate(r.checkin_at) : "—"}</td>
+            <>
+              {/* Mobile: карточная вёрстка, чтобы таблица не уползала горизонтально */}
+              <ul className="space-y-2 md:hidden">
+                {items.map((r) => (
+                  <li
+                    key={r.id}
+                    className="rounded-lg border border-border bg-muted/40 p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-text">{r.full_name_masked}</div>
+                        <div className="mt-0.5 font-mono text-xs text-subtle">
+                          {r.contact_masked}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right text-xs text-subtle">
+                        <div>зап. {fmtDate(r.registered_at)}</div>
+                        <div className={r.checkin_at ? "text-success" : ""}>
+                          {r.checkin_at ? `пришёл ${fmtDate(r.checkin_at)}` : "—"}
+                        </div>
+                      </div>
+                    </div>
+                    {r.interest_program && (
+                      <div className="mt-2 text-xs text-subtle">
+                        Интерес: <span className="text-text">{r.interest_program}</span>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop: классическая таблица */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-subtle">
+                      <th className="py-2 pr-3 font-medium">ФИО</th>
+                      <th className="py-2 pr-3 font-medium">Контакт</th>
+                      <th className="py-2 pr-3 font-medium">Интерес</th>
+                      <th className="py-2 pr-3 font-medium">Записан</th>
+                      <th className="py-2 pr-3 font-medium">Check-in</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {items.map((r) => (
+                      <tr key={r.id} className="border-b border-border/60 last:border-b-0">
+                        <td className="py-2 pr-3">{r.full_name_masked}</td>
+                        <td className="py-2 pr-3 font-mono text-xs">{r.contact_masked}</td>
+                        <td className="py-2 pr-3">{r.interest_program || "—"}</td>
+                        <td className="py-2 pr-3">{fmtDate(r.registered_at)}</td>
+                        <td className={"py-2 pr-3 " + (r.checkin_at ? "text-success" : "")}>
+                          {r.checkin_at ? fmtDate(r.checkin_at) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
           <div className="mt-4 flex items-center justify-between">

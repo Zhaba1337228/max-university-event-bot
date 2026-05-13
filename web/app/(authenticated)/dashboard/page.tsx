@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, HttpError } from "@/lib/api";
-import { DashboardResp, EventDTO, ListEventsResp } from "@/lib/types";
+import { DashboardResp, EventDTO, ListEventsResp, roleLabel } from "@/lib/types";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { fmtDate, statusBadge, statusLabel } from "@/lib/format";
+import { useMe } from "@/components/me-context";
 
 export default function DashboardPage() {
+  const me = useMe();
   const [stats, setStats] = useState<DashboardResp | null>(null);
   const [my, setMy] = useState<EventDTO[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -42,10 +44,16 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Дашборд</h1>
+      <div>
+        <h1 className="text-2xl font-semibold sm:text-3xl">Дашборд</h1>
+        <p className="mt-1 text-sm text-subtle">
+          Вы вошли как <span className="font-medium text-text">{roleLabel(me.user.role)}</span>. Управляйте мероприятиями и
+          смотрите статистику регистраций.
+        </p>
+      </div>
       {err && <p className="text-danger">{err}</p>}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard label="Мои мероприятия" value={stats?.total_events ?? "—"} />
         <StatCard label="Зарегистрировано" value={stats?.total_registered ?? "—"} />
         <StatCard label="Предстоящие" value={stats?.upcoming_events ?? "—"} />
@@ -86,9 +94,11 @@ export default function DashboardPage() {
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
-    <Card>
-      <div className="text-sm text-subtle">{label}</div>
-      <div className="mt-1 text-3xl font-semibold">{value}</div>
+    <Card className="bg-gradient-to-br from-surface to-surfaceAlt">
+      <div className="text-xs uppercase tracking-wide text-subtle sm:text-sm sm:normal-case sm:tracking-normal">
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-semibold leading-tight sm:text-3xl">{value}</div>
     </Card>
   );
 }

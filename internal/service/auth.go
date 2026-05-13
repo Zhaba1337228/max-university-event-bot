@@ -94,7 +94,7 @@ func (s *authService) IssueMagic(ctx context.Context, maxUserID int64) (string, 
 	if err != nil {
 		return "", fmt.Errorf("lookup user: %w", err)
 	}
-	if u == nil || !u.IsOrganizer() {
+	if u == nil || !u.CanAccessAdminPanel() {
 		return "", ErrAccessDenied
 	}
 	return s.issue(u.ID, u.Role, PurposeMagic, magicTTL)
@@ -119,7 +119,7 @@ func (s *authService) IssueSession(ctx context.Context, userID int64) (string, e
 	if err != nil {
 		return "", fmt.Errorf("lookup user: %w", err)
 	}
-	if u == nil || !u.IsOrganizer() {
+	if u == nil || !u.CanAccessAdminPanel() {
 		return "", ErrAccessDenied
 	}
 	return s.issue(u.ID, u.Role, PurposeSession, sessionTTL)
@@ -142,7 +142,7 @@ func (s *authService) VerifySession(ctx context.Context, token string) (*Claims,
 	if u == nil || u.Role != c.Role {
 		return nil, ErrAuthRoleChanged
 	}
-	if !u.IsOrganizer() {
+	if !u.CanAccessAdminPanel() {
 		return nil, ErrAccessDenied
 	}
 	return c, nil

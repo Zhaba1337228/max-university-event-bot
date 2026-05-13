@@ -246,9 +246,10 @@ func (s *Server) handleBroadcast(w http.ResponseWriter, r *http.Request) {
 
 // handleCheckin — POST /api/checkin { "qr": "MAXUEB:<eventID>:<code>" }.
 //
-// AttendanceService.CheckIn принимает organizerMaxUserID, потому что внутри
-// он зовёт Role.RequireEventOwner. У нас в JWT — local user_id, поэтому
+// AttendanceService.CheckIn принимает scannerMaxUserID, потому что внутри
+// он зовёт Role.RequireStaff. У нас в JWT — local user_id, поэтому
 // делаем один доп. lookup через UsersRepo.GetByID → MaxUserID.
+// Organizer-овнер события НЕ имеет права сканировать QR — вернётся 403.
 func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 	c, _ := claimsFromContext(r.Context())
 
@@ -271,6 +272,13 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pre-check по роли из JWT: организатор НЕ приходит сюда (и НЕ сканерит гостей).
+	// Staff/admin — пускаем. Applicant в admin API не попадёт (auth жёстко режет).
+	if c.Role != domain.RoleStaff && c.Role != domain.RoleAdmin {
+		writeJSON(w, http.StatusForbidden, errResp("role_forbidden", "Эта страница доступна только волонтёрам на входе (staff)"))
+		return
+	}
+
 	res, err := s.deps.Attendance.CheckIn(r.Context(), usr.MaxUserID, body.QR)
 	switch {
 	case errors.Is(err, service.ErrQRInvalidPrefix), errors.Is(err, service.ErrQRInvalidFormat):
@@ -282,8 +290,8 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, service.ErrEventNotFound):
 		writeJSON(w, http.StatusNotFound, errResp("event_not_found", "Событие не найдено"))
 		return
-	case errors.Is(err, service.ErrNotOrganizer), errors.Is(err, service.ErrNotEventOwner):
-		writeJSON(w, http.StatusForbidden, errResp("forbidden", "Нет прав на это событие"))
+	case errors.Is(err, service.ErrNotStaff), errors.Is(err, service.ErrNotOrganizer), errors.Is(err, service.ErrNotEventOwner):
+		writeJSON(w, http.StatusForbidden, errResp("forbidden", "Нет прав на check-in"))
 		return
 	case errors.Is(err, service.ErrCheckinWindowClosed):
 		writeJSON(w, http.StatusConflict, errResp("window_closed", "Окно check-in закрыто"))

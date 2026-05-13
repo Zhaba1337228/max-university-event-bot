@@ -1,15 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { api, HttpError } from "@/lib/api";
 import { Me } from "@/lib/types";
 import { Nav } from "@/components/nav";
+import { MeContext } from "@/components/me-context";
 
 // Shell для всех страниц после входа.
-// При 401 → редирект на /auth/login.
+//
+// Обязанности:
+//   1. Получить /api/auth/me; при 401 → /auth/login.
+//   2. Применить role-based gate:
+//      • staff попадает только на /checkin (всё остальное → /checkin)
+//      • organizer не имеет права на /checkin (→ /forbidden)
+//      • admin имеет доступ ко всему.
+//   3. Прокинуть `me` в children через MeContext (без повторных fetch).
 export default function AuthedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,6 +44,28 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
     };
   }, [router]);
 
+  // Role-based redirects (выполняем только после загрузки me).
+  useEffect(() => {
+    if (!me) return;
+    const role = me.user.role;
+
+    // Staff: только /checkin. Любая попытка зайти на организаторские страницы
+    // → редирект на /checkin. Так у волонтёра нет лишних разделов.
+    if (role === "staff") {
+      const allowed = pathname === "/checkin" || pathname.startsWith("/forbidden");
+      if (!allowed) {
+        router.replace("/checkin");
+      }
+      return;
+    }
+
+    // Organizer (не admin): нет доступа к /checkin.
+    if (role === "organizer" && pathname.startsWith("/checkin")) {
+      router.replace("/forbidden?reason=checkin_organizer");
+      return;
+    }
+  }, [me, pathname, router]);
+
   if (loading) {
     return (
       <div className="container py-16 text-subtle">Загрузка…</div>
@@ -43,10 +74,24 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
   if (!me) {
     return null;
   }
+
+  // Пока выполняется client-side редирект — рендерим пустой shell, чтобы
+  // не мигало содержимое страницы, на которую staff/organizer не имеют прав.
+  const role = me.user.role;
+  if (role === "staff" && pathname !== "/checkin" && !pathname.startsWith("/forbidden")) {
+    return <div className="container py-16 text-subtle">Перенаправляем…</div>;
+  }
+  if (role === "organizer" && pathname.startsWith("/checkin")) {
+    return <div className="container py-16 text-subtle">Перенаправляем…</div>;
+  }
+
   return (
-    <div className="min-h-screen">
-      <Nav />
-      <main className="container py-6">{children}</main>
-    </div>
+    <MeContext.Provider value={me}>
+      <div className="min-h-screen">
+        <Nav role={role} />
+        <main className="container py-6 sm:py-8">{children}</main>
+      </div>
+    </MeContext.Provider>
   );
 }
+

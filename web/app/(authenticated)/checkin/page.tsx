@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { api, HttpError } from "@/lib/api";
 import { CheckinResp } from "@/lib/types";
@@ -58,9 +57,10 @@ export default function CheckinPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Check-in</h1>
+        <h1 className="text-2xl font-semibold sm:text-3xl">Check-in</h1>
         <p className="mt-1 text-sm text-subtle">
-          Наведите камеру на QR-код участника. Доступ только для организатора.
+          Наведите камеру на QR-код участника или введите его вручную.
+          Доступно только волонтёрам на входе (роль <span className="font-medium text-text">staff</span>) и администраторам.
         </p>
       </div>
 
@@ -87,7 +87,7 @@ export default function CheckinPage() {
           ) : (
             <p className="text-subtle">Сканер выключен.</p>
           )}
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button
               variant="secondary"
               onClick={() => {
@@ -97,9 +97,6 @@ export default function CheckinPage() {
             >
               {scanning ? "Выключить камеру" : "Включить камеру"}
             </Button>
-            <Link href="/dashboard">
-              <Button variant="ghost">На дашборд</Button>
-            </Link>
           </div>
         </CardBody>
       </Card>
@@ -110,7 +107,7 @@ export default function CheckinPage() {
         </CardHeader>
         <CardBody>
           <form
-            className="flex gap-2"
+            className="flex flex-col gap-2 sm:flex-row"
             onSubmit={(e) => {
               e.preventDefault();
               submit(manual);
@@ -120,11 +117,18 @@ export default function CheckinPage() {
               placeholder="MAXUEB:42:abcd1234..."
               value={manual}
               onChange={(e) => setManual(e.target.value)}
+              inputMode="text"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
             />
-            <Button type="submit" disabled={busy || !manual.trim()}>
+            <Button type="submit" disabled={busy || !manual.trim()} className="sm:w-auto">
               Отметить
             </Button>
           </form>
+          <p className="mt-2 text-xs text-subtle">
+            Формат: <span className="font-mono">MAXUEB:&lt;event_id&gt;:&lt;code&gt;</span>
+          </p>
         </CardBody>
       </Card>
 
