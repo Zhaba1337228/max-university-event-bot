@@ -115,3 +115,43 @@
 - **План:** раздел 8 — комментарии «-- role: applicant|organizer|admin».
 - **Реальность:** добавлены `CHECK (role IN (...))` в миграциях users, events, registrations, notifications. Лишний слой защиты от опечаток в коде и ручных правок в БД.
 - **Дата:** 2026-05-13.
+
+---
+
+## День 4 (long-poll, dispatcher, /start)
+
+### 14. SDK: `WithApiTimeout` вместо `WithClientTimeout`
+
+- **План:** раздел 11.2 — `maxbot.WithClientTimeout(30 * time.Second)`.
+- **Реальность:** в SDK v1.6.17 есть `WithApiTimeout`, `WithPauseTimeout`, `WithHTTPClient`, но НЕТ `WithClientTimeout`.
+- **Источник:** `options.go` в `github.com/max-messenger/max-bot-api-client-go@v1.6.17`.
+- **Решение:** используем `WithApiTimeout` — это таймаут на сам long-poll цикл.
+- **Дата:** 2026-05-13.
+
+### 15. SDK: `Callback.CallbackID` (а не `CallbackId`)
+
+- **План:** раздел 11.7 — `upd.Callback.CallbackId`.
+- **Реальность:** в SDK поле названо `CallbackID` (с большой `D`). Любопытно, что соседние `UserId`, `ChatId` — с маленькой `d`. Мешанина в самом SDK, мы её повторяем для совместимости.
+- **Источник:** `schemes/schemes.go`.
+- **Решение:** в коде везде `CallbackID`.
+- **Дата:** 2026-05-13.
+
+### 16. CI: pin Go = `stable` вместо `1.25.x`
+
+- **План:** не специфицировано.
+- **Реальность:** govulncheck флагнул `GO-2026-4971` (Panic in net.Dial on Windows). Фикс в Go 1.25.10, а setup-go с `1.25.x` берёт latest minor, которая на момент CI run могла быть 1.25.9.
+- **Решение:** в CI используем `go-version: stable` — всегда последняя стабильная.
+- **Дата:** 2026-05-13.
+
+### 17. Bot ctx в виде handlers.go вместо отдельного ctx.go
+
+- **План:** раздел 15.1 — `internal/bot/ctx.go` с типом Ctx, который содержит api/log/services/fsm/update.
+- **Реальность:** на день 4 такой агрегатор overkill — у каждого handler уже есть свои зависимости в полях. `handlers.go` (вместо `ctx.go`) держит корневой Handlers с маршрутизацией.
+- **Решение:** когда (в дни 5+) появится много handlers — можно мигрировать на агрегатор. Сейчас — KISS.
+- **Дата:** 2026-05-13.
+
+### 18. На день 4 — только /start, /help и главное меню
+
+- **План:** раздел 23 (День 4) — то же самое.
+- **Реальность:** другие команды (`/organizer`, `/admin_login`, `/forget_me`) и callback-группы (`ev:`, `reg:`, `my:`, `wl:`, `cancel:`, `org:`, ...) определены как payloads, но handlers ещё не реализованы — будут в днях 5-12.
+- **Дата:** 2026-05-13.
