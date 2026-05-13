@@ -11,13 +11,14 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/fsm"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/handlers"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 )
 
 // Handlers — корневой holder всех скоупированных обработчиков.
 // Маршрутизация по типу Update реализована в Dispatcher.
 //
-// На День 4 присутствуют только Start и Fallback; остальные хендлеры
-// добавятся в дни 5-12. Маршрутизатор RouteCallback заранее знает все группы,
+// По мере прохождения дней дорожной карты сюда добавляются новые обработчики
+// (см. план §15.1). Маршрутизатор RouteCallback заранее знает все группы,
 // чтобы при появлении хендлера не пришлось переписывать switch.
 type Handlers struct {
 	Log *slog.Logger
@@ -25,17 +26,28 @@ type Handlers struct {
 
 	Start    *handlers.StartHandler
 	Fallback *handlers.FallbackHandler
+	Events   *handlers.EventsHandler
 }
 
-// NewHandlers собирает Handlers. По мере добавления сервисов в дни 5-12 здесь
-// будет расти количество параметров, либо мы перейдём на struct-конфиг.
-func NewHandlers(api *maxclient.Client, log *slog.Logger, fsmMgr *fsm.Manager) *Handlers {
+// HandlersConfig — групповая инициализация. По мере роста зависимостей удобнее
+// передавать конфиг, чем 10 позиционных параметров.
+type HandlersConfig struct {
+	API             *maxclient.Client
+	Log             *slog.Logger
+	FSM             *fsm.Manager
+	Events          service.Event
+	WaitlistEnabled bool
+}
+
+// NewHandlers собирает Handlers по конфигу.
+func NewHandlers(cfg HandlersConfig) *Handlers {
 	h := &Handlers{
-		Log: log.With("component", "handlers"),
-		FSM: fsmMgr,
+		Log: cfg.Log.With("component", "handlers"),
+		FSM: cfg.FSM,
 	}
-	h.Start = handlers.NewStartHandler(api, fsmMgr, log)
-	h.Fallback = handlers.NewFallbackHandler(api, fsmMgr, log)
+	h.Start = handlers.NewStartHandler(cfg.API, cfg.FSM, cfg.Log)
+	h.Fallback = handlers.NewFallbackHandler(cfg.API, cfg.FSM, cfg.Log)
+	h.Events = handlers.NewEventsHandler(cfg.API, cfg.FSM, cfg.Events, cfg.Log, cfg.WaitlistEnabled)
 	return h
 }
 
@@ -64,8 +76,8 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 
 // RouteCallback маршрутизирует MessageCallbackUpdate по группе payload'а.
 //
-// На День 4 живых обработчиков ещё мало, но switch покрывает все группы,
-// чтобы не пропускать неизвестные payload'ы — для них fallback с logging.
+// Группы, для которых ещё нет реального handler'а (дни 6-12), уходят в
+// Fallback с понятным сообщением «Эта кнопка устарела».
 func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallbackUpdate) {
 	p := callbacks.Parse(upd.Callback.Payload)
 	switch p.Group {
@@ -73,8 +85,10 @@ func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallba
 		h.Start.OnMainMenu(ctx, upd)
 	case callbacks.GroupBack:
 		h.Start.OnMainMenu(ctx, upd)
+	case callbacks.GroupEvent:
+		h.Events.OnCallback(ctx, upd, p)
 	default:
-		// День 5+: появятся ev/reg/my/cancel/wl/org/...
+		// Дни 6-12: появятся reg/my/cancel/wl/org/orglist/orgnotif/orgclose/admin/ai
 		h.Fallback.OnCallback(ctx, upd, p)
 	}
 }

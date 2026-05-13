@@ -38,10 +38,11 @@ jobs:
 
       - name: Build binaries
         run: |
+          # Только сборка; запускать /tmp/bot нельзя — он требует MAX_BOT_TOKEN.
+          # Реальный smoke по миграциям делает джоб 'migrate' ниже.
           go build -trimpath -o /tmp/bot     ./cmd/bot
           go build -trimpath -o /tmp/migrate ./cmd/migrate
-          /tmp/bot
-          /tmp/migrate 2>&1 || true
+          /tmp/migrate 2>&1 || true   # просто проверка, что usage печатается
 
       - name: Run tests with race detector
         run: go test ./... -race -count=1 -timeout=2m

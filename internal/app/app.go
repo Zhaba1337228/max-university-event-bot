@@ -13,18 +13,19 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/fsm"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/repo"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/transport/longpoll"
 )
 
 // App собирает все зависимости и предоставляет Run/Shutdown.
 //
 // На день 4 поднимаем минимальный конвейер:
-//   1. pgxpool (Ping проверяет связь);
-//   2. UserStates репозиторий + FSM Manager;
-//   3. MAX client (Ping проверяет токен);
-//   4. Handlers (Start, Fallback);
-//   5. Dispatcher на 32 параллельных хендлера;
-//   6. Long-poll Runner.
+//  1. pgxpool (Ping проверяет связь);
+//  2. UserStates репозиторий + FSM Manager;
+//  3. MAX client (Ping проверяет токен);
+//  4. Handlers (Start, Fallback);
+//  5. Dispatcher на 32 параллельных хендлера;
+//  6. Long-poll Runner.
 //
 // Дни 5-12 добавят остальные репозитории и сервисы; день 13 добавит admin API
 // и scheduler. Здесь сейчас — самый узкий «спинной мозг».
@@ -53,11 +54,18 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	}
 	a.pool = pool
 
-	// 2. FSM
+	// 2. Repositories
 	statesRepo := repo.NewUserStates()
+	eventsRepo := repo.NewEvents()
+	regsRepo := repo.NewRegistrations()
+
+	// 3. FSM
 	fsmMgr := fsm.NewManager(statesRepo, pool)
 
-	// 3. MAX client + ping
+	// 4. Services
+	eventSvc := service.NewEvent(pool, eventsRepo, regsRepo)
+
+	// 5. MAX client + ping
 	mc, err := maxclient.New(maxclient.Config{
 		Token:       cfg.Max.Token,
 		HTTPTimeout: cfg.Max.HTTPTimeout,
@@ -80,8 +88,14 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 		"username", botInfo.Username,
 	)
 
-	// 4. Handlers + Dispatcher + Long-poll runner
-	handlers := bot.NewHandlers(mc, log, fsmMgr)
+	// 6. Handlers + Dispatcher + Long-poll runner
+	handlers := bot.NewHandlers(bot.HandlersConfig{
+		API:             mc,
+		Log:             log,
+		FSM:             fsmMgr,
+		Events:          eventSvc,
+		WaitlistEnabled: cfg.Business.WaitlistEnabled,
+	})
 	a.dispatcher = bot.NewDispatcher(log, handlers, 32)
 	a.longpoll = longpoll.New(mc, log)
 	a.updates = make(chan schemes.UpdateInterface, 256)

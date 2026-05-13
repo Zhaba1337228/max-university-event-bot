@@ -1,0 +1,147 @@
+package handlers
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"strings"
+
+	"github.com/max-messenger/max-bot-api-client-go/schemes"
+
+	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/callbacks"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/fsm"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/keyboards"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/messages"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
+)
+
+// EventsHandler — обработчик кнопок «список мероприятий» и «карточка».
+type EventsHandler struct {
+	api    *maxclient.Client
+	fsm    *fsm.Manager
+	events service.Event
+	log    *slog.Logger
+	// businessWaitlistEnabled определяет, рисовать ли «Встать в лист ожидания»
+	// в карточке когда мест нет. Берётся из cfg.Business.WaitlistEnabled.
+	businessWaitlistEnabled bool
+}
+
+// NewEventsHandler — конструктор.
+func NewEventsHandler(api *maxclient.Client, fsmMgr *fsm.Manager, ev service.Event,
+	log *slog.Logger, waitlistEnabled bool,
+) *EventsHandler {
+	return &EventsHandler{
+		api:                     api,
+		fsm:                     fsmMgr,
+		events:                  ev,
+		log:                     log.With("handler", "events"),
+		businessWaitlistEnabled: waitlistEnabled,
+	}
+}
+
+// OnCallback маршрутизирует callback'и группы "ev:" — list, show.
+func (h *EventsHandler) OnCallback(ctx context.Context, upd *schemes.MessageCallbackUpdate, p callbacks.Payload) {
+	// Закрываем спиннер «крутится» сразу, чтобы UI отвечал быстро.
+	if err := h.api.AnswerCallback(ctx, upd.Callback.CallbackID, ""); err != nil {
+		h.log.Warn("answer callback failed", "err", err)
+	}
+
+	chatID := upd.Message.Recipient.ChatId
+	userID := upd.Callback.User.UserId
+
+	switch p.Action {
+	case "list":
+		offset := int(p.ArgInt64(0))
+		h.showList(ctx, chatID, userID, offset)
+	case "show":
+		eventID := p.ArgInt64(0)
+		h.showCard(ctx, chatID, userID, eventID)
+	default:
+		h.log.Debug("unknown ev action", "action", p.Action)
+		if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.FallbackUnknown(), keyboards.MainMenu()); err != nil {
+			h.log.Error("send fallback failed", "err", err)
+		}
+	}
+}
+
+func (h *EventsHandler) showList(ctx context.Context, chatID, userID int64, offset int) {
+	pageSize := keyboards.PageSize()
+
+	items, total, err := h.events.ListOpen(ctx, pageSize, offset)
+	if err != nil {
+		h.log.Error("list events failed", "err", err)
+		if sendErr := h.api.SendTextWithKeyboard(ctx, chatID, messages.ErrorTryLater(), keyboards.MainMenu()); sendErr != nil {
+			h.log.Error("send error msg failed", "err", sendErr)
+		}
+		return
+	}
+
+	if len(items) == 0 {
+		if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.EventListEmpty(), keyboards.MainMenu()); err != nil {
+			h.log.Error("send empty list failed", "err", err)
+		}
+		return
+	}
+
+	// Сохраняем offset в FSM, чтобы из карточки кнопка «Назад к списку»
+	// возвращала пользователя на ту же страницу.
+	snap, _ := h.fsm.Load(ctx, userID)
+	snap.Context.Offset = offset
+	_ = h.fsm.Save(ctx, userID, fsm.StateEventList, snap.Context)
+
+	hasMore := offset+pageSize < total
+
+	// Текстовый список + клавиатура.
+	var b strings.Builder
+	b.WriteString(messages.EventListHeader())
+	b.WriteString("\n\n")
+	events := make([]*domain.Event, 0, len(items))
+	for i, it := range items {
+		b.WriteString(messages.EventListItem(i+offset, it.Event))
+		if it.FreeSeats == 0 {
+			b.WriteString(" (мест нет)")
+		}
+		b.WriteString("\n")
+		events = append(events, it.Event)
+	}
+
+	kb := keyboards.EventList(events, offset, hasMore)
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, b.String(), kb); err != nil {
+		h.log.Error("send list failed", "err", err)
+	}
+}
+
+func (h *EventsHandler) showCard(ctx context.Context, chatID, userID int64, eventID int64) {
+	withFree, err := h.events.GetOpen(ctx, eventID)
+	switch {
+	case errors.Is(err, service.ErrEventNotFound):
+		if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.EventNotAvailable(), keyboards.MainMenu()); err != nil {
+			h.log.Error("send not-found failed", "err", err)
+		}
+		return
+	case errors.Is(err, service.ErrEventClosed):
+		if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.EventClosedNow(), keyboards.MainMenu()); err != nil {
+			h.log.Error("send closed failed", "err", err)
+		}
+		return
+	case err != nil:
+		h.log.Error("get event failed", "err", err, "event_id", eventID)
+		if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.ErrorTryLater(), keyboards.MainMenu()); err != nil {
+			h.log.Error("send error msg failed", "err", err)
+		}
+		return
+	}
+
+	// FSM: запомним текущее событие, чтобы reg-handler понял с чего стартовать.
+	snap, _ := h.fsm.Load(ctx, userID)
+	snap.Context.CurrentEventID = withFree.Event.ID
+	_ = h.fsm.Save(ctx, userID, fsm.StateEventDetails, snap.Context)
+
+	text := messages.EventCard(withFree.Event, withFree.FreeSeats)
+	kb := keyboards.EventCard(withFree.Event.ID, withFree.FreeSeats, h.businessWaitlistEnabled, snap.Context.Offset)
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, text, kb); err != nil {
+		h.log.Error("send card failed", "err", err)
+	}
+}

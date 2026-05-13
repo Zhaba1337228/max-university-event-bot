@@ -155,3 +155,11 @@
 - **План:** раздел 23 (День 4) — то же самое.
 - **Реальность:** другие команды (`/organizer`, `/admin_login`, `/forget_me`) и callback-группы (`ev:`, `reg:`, `my:`, `wl:`, `cancel:`, `org:`, ...) определены как payloads, но handlers ещё не реализованы — будут в днях 5-12.
 - **Дата:** 2026-05-13.
+
+### 19. notifications_dedup: IMMUTABLE-выражение вместо date_trunc
+
+- **План:** раздел 8.9 — `CREATE UNIQUE INDEX uniq_notif_dedup ON notifications (user_id, event_id, type, date_trunc('minute', scheduled_at))`.
+- **Реальность:** PostgreSQL отвергает `date_trunc(text, timestamptz)` в expression index с ошибкой «functions in index expression must be marked IMMUTABLE (SQLSTATE 42P17)» — потому что timestamptz зависит от session timezone.
+- **Источник:** CI run #25824279837, job `migrate up against real Postgres`.
+- **Решение:** заменили на `((EXTRACT(EPOCH FROM scheduled_at)::bigint) / 60)` — это integer-арифметика, IMMUTABLE. Та же гарантия «1-минутный bucket», но не зависит от timezone. Соответствующий ON CONFLICT в `repo.Notifications.Schedule` обновлён синхронно.
+- **Дата:** 2026-05-13.
