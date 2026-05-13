@@ -1,0 +1,195 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  GO_VERSION: "1.25.x"
+
+jobs:
+  # =========================================================================
+  # build + tests + race detector (pgxmock, без реальной БД)
+  # =========================================================================
+  test:
+    name: build + test (race)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Build all packages
+        run: go build ./...
+
+      - name: Build binaries
+        run: |
+          go build -trimpath -o /tmp/bot     ./cmd/bot
+          go build -trimpath -o /tmp/migrate ./cmd/migrate
+          /tmp/bot
+          /tmp/migrate 2>&1 || true
+
+      - name: Run tests with race detector
+        run: go test ./... -race -count=1 -timeout=2m
+
+      - name: Coverage
+        run: |
+          go test ./... -race -count=1 -coverprofile=coverage.out -timeout=2m
+          go tool cover -func=coverage.out | tail -1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  # =========================================================================
+  # формат и статический анализ
+  # =========================================================================
+  lint:
+    name: gofmt + go vet + golangci-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: gofmt -s
+        run: |
+          out=$(gofmt -s -l .)
+          if [ -n "$out" ]; then
+            echo "::error::Files not formatted (run 'gofmt -s -w .'):"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+  # =========================================================================
+  # security: govulncheck + gosec
+  # =========================================================================
+  security:
+    name: govulncheck + gosec
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: gosec
+        uses: securego/gosec@master
+        with:
+          args: -exclude-dir=frontend -severity=medium ./...
+
+  # =========================================================================
+  # реальная миграция против postgres-сервиса
+  # =========================================================================
+  migrate:
+    name: migrate up against real Postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: maxbot
+        options: >-
+          --health-cmd "pg_isready -U app -d maxbot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgres://app:app@localhost:5432/maxbot?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 20); do
+            if pg_isready -h localhost -p 5432 -U app -d maxbot; then
+              echo "Postgres is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Postgres failed to become ready"
+          exit 1
+
+      - name: Build migrate binary
+        run: go build -trimpath -o /tmp/migrate ./cmd/migrate
+
+      - name: Apply migrations up
+        run: /tmp/migrate up
+
+      - name: Show schema status
+        run: /tmp/migrate status
+
+      - name: Verify seed events present
+        run: |
+          PGPASSWORD=app psql -h localhost -U app -d maxbot -c \
+            "SELECT id, title, capacity FROM events ORDER BY id;"
+
+      - name: Verify all expected tables exist
+        run: |
+          PGPASSWORD=app psql -h localhost -U app -d maxbot -tAc \
+            "SELECT table_name FROM information_schema.tables
+             WHERE table_schema='public'
+             ORDER BY table_name" | tee /tmp/tables.txt
+          grep -q '^users$'         /tmp/tables.txt
+          grep -q '^events$'        /tmp/tables.txt
+          grep -q '^registrations$' /tmp/tables.txt
+          grep -q '^action_logs$'   /tmp/tables.txt
+          grep -q '^notifications$' /tmp/tables.txt
+          grep -q '^user_states$'   /tmp/tables.txt
+
+      - name: Round-trip down/up
+        run: |
+          /tmp/migrate down
+          /tmp/migrate up
+          /tmp/migrate status
