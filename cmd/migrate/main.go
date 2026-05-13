@@ -34,6 +34,8 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/migrations"
 )
 
+// usage — справка по командам.
+// nolint:gosec // G101: пример строки подключения, не настоящие credentials.
 const usage = `usage: migrate <command> [args]
 
 Commands:
@@ -49,7 +51,7 @@ Commands:
   create <name> <type>     create a new migration file (sql|go)
 
 Required env:
-  DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=disable
+  DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DBNAME?sslmode=disable
 `
 
 func main() {

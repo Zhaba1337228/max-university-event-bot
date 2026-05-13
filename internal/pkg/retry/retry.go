@@ -100,7 +100,9 @@ func computeDelay(cfg Config, attempt int) time.Duration {
 	}
 	if cfg.Jitter {
 		// ±25% случайности.
-		jitter := time.Duration(rand.Int64N(int64(d) / 2))
+		// math/rand/v2 здесь безопасен: jitter не используется для криптографии
+		// или предсказуемости токенов — это просто разброс времени retry.
+		jitter := time.Duration(rand.Int64N(int64(d) / 2)) //nolint:gosec // G404: jitter, не crypto
 		d = d - d/4 + jitter
 	}
 	return d
