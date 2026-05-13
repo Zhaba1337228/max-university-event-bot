@@ -208,10 +208,26 @@
 
 ---
 
-## День 14 — frontend Next.js ⬜ (отложено: пользователь выбрал «без фронта»)
+## День 14 — frontend Next.js ✅
 
-См. план §21A. REST API готов и проверяется через curl/Postman.
-Если потом нужен фронт — он будет потреблять уже-готовые endpoints.
+- [x] web/ — Next.js 14 (App Router, standalone output), TypeScript, Tailwind
+- [x] Без shadcn/ui CLI — лёгкие обёртки Card/Button/Input/Textarea/Badge на Tailwind
+  (см. deviations.md, скорость сборки в Docker × отсутствие интерактивных шагов)
+- [x] next.config.mjs rewrites /api/* → API_UPSTREAM (same-origin cookies)
+- [x] /auth?t=<jwt> — Suspense + useSearchParams → POST /api/auth/exchange → /dashboard
+- [x] /auth/login — fallback-страница «как войти»
+- [x] (authenticated) route group с layout-guard на /api/auth/me
+- [x] /dashboard — счётчики (events/registered/upcoming) + список своих
+- [x] /events — табы «Мои/Все открытые»
+- [x] /events/[id] — карточка + статистика + close/open + быстрые кнопки
+- [x] /events/[id]/participants — пагинация + поиск + маскированные ПДн
+- [x] /events/[id]/broadcast — textarea + лимит 4000 + confirm
+- [x] /checkin — камера (@yudiel/react-qr-scanner) + anti-flood 3s + ручной ввод
+- [x] web/Dockerfile (multi-stage node:20-alpine, non-root uid=10001, healthcheck)
+- [x] deployments/docker-compose.yml — сервис web (read_only + tmpfs + cap_drop)
+- [x] .github/workflows/ci.yml — новый job `web (next build)` на Node 20
+
+**Артефакт:** `npm run build` зелёный (9/9 static pages), `npm run lint` без ошибок. ✅
 
 ---
 
@@ -232,7 +248,7 @@
   - GenerateQRPNG → tmpfile → UploadPhotoFromFile → SendWithResult
   - Все ошибки логируются но не блокируют регистрацию
 - [x] POST /api/checkin endpoint работает с реальными QR из бота
-- [ ] **frontend страница checkin** — отложено вместе с Днём 14
+- [x] frontend страница /checkin реализована в Day 14 (камера + ручной ввод)
 
 ---
 
@@ -285,14 +301,49 @@
 
 ---
 
-## День 14, 16, 20 ⬜
+## День 16 — AI (GigaChat) + scheduler ✅
 
-- [ ] **День 14** — Next.js frontend (пользователь отложил)
-- [ ] **День 16** — AI-сервисы (GigaChat) + scheduler с reminders
-- [ ] **День 20** — финальный smoke на чистом окружении + резервное демо-видео
+- [x] internal/external/gigachat/client.go — OAuth `client_credentials` с
+  автообновлением access_token (TTL ≥ 60s buffer), opt-in InsecureTLS для dev.
+- [x] internal/external/gigachat/prompts.go — system/user шаблоны для
+  Recommender / Rewriter / Summary.
+- [x] internal/service/ai.go — фасад с graceful `ErrAIUnavailable`:
+  - RecommendEvents — фильтрация выдуманных event_id, stripCodeFences.
+  - RewriteNotification — лимит 4000 символов, JSON parsing fallback.
+  - OrganizerSummary — детерминированная top_interests строка.
+- [x] internal/scheduler/scheduler.go — gocron/v2, три job'а:
+  - dispatchDue (1 мин) — PickDue + SendTextToUser + MarkSent/Failed,
+    ~20 rps между отправками (50 ms sleep).
+  - scheduleReminders (5 мин) — для событий в ближайшие 25h создаёт
+    reminder_24h / reminder_1h на всех registered (uniq_notif_dedup
+    делает операцию идемпотентной).
+  - purgeStaleStates (24h) — чистка FSM старше StateTTL (7 дней).
+- [x] handlers/ai_pick.go — главное меню → ai:pick → AIAskInterest →
+  RecommendEvents → клавиатура «Записаться»; fallback в обычный список.
+- [x] handlers/organizer.go::showAISummary — graceful fallback в обычную
+  статистику + сообщение «AI недоступен».
+- [x] handlers/organizer_notify.go::onAIRewrite — на fallback оставляет
+  оригинальный текст.
+- [x] app.go — GigaChat создаётся только при `GIGACHAT_AUTH_KEY != ""`,
+  scheduler стартует всегда, корректный Stop() в Shutdown.
+- [x] handlers.go — RouteCallback `GroupAI` + RouteMessage `StateAIPickIntent`.
+
+**Артефакт:** build/vet/lint/test — все зелёные, без живого ключа GigaChat
+вся AI-цепочка деградирует в fallback. ✅
+
+---
+
+## День 20 — финальный smoke + готовность к демо ⬜
+
+- [ ] чистый clone → `make docker-up` (postgres + migrate + bot + web) проходит
+- [ ] /start → главное меню → список → запись → QR (бот)
+- [ ] /admin_login → magic-link → /auth?t= → /dashboard → /events/:id → broadcast → /checkin
+- [ ] видео-демо как fallback (если живая среда не поднимется на демо)
+- [ ] финальная сверка docs/deviations.md (всё ли пояснено)
+- [ ] финальный коммит, RELEASE-tag (опц.)
 
 ---
 
 ## Чеклист готовности к демо (см. план §24) ⬜
 
-Будет заполнен в день 20 после финального прогона. Сейчас — пусто.
+Заполняется в день 20.
