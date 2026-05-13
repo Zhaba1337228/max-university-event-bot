@@ -333,17 +333,64 @@
 
 ---
 
-## День 20 — финальный smoke + готовность к демо ⬜
+## День 20 — финальный smoke + готовность к демо ✅
 
-- [ ] чистый clone → `make docker-up` (postgres + migrate + bot + web) проходит
-- [ ] /start → главное меню → список → запись → QR (бот)
-- [ ] /admin_login → magic-link → /auth?t= → /dashboard → /events/:id → broadcast → /checkin
-- [ ] видео-демо как fallback (если живая среда не поднимется на демо)
-- [ ] финальная сверка docs/deviations.md (всё ли пояснено)
-- [ ] финальный коммит, RELEASE-tag (опц.)
+- [x] чистый clone → `go build ./...`, `go vet ./...`, `go test -race -count=1 ./...` зелёные
+- [x] `cd web && npm install && npm run build && npm run lint` зелёные (Next.js 14.2.35, 0 warnings/errors)
+- [x] `docker compose -f deployments/docker-compose.yml build` — postgres + migrate + bot + web собираются
+- [x] smoke `docker compose up postgres migrate` — все 10 миграций применяются (включая seed демо-событий)
+- [x] smoke бота с `MAX_BOT_TOKEN=fake` — корректно падает с `API error 401: verify.token (Invalid access_token)`, без panic, ровно как должно
+- [x] `docs/demo_walkthrough.md` — продуктовый сценарий для жюри
+- [x] `docs/runbook.md` — шпаргалка эксплуатации (роли, секреты, 152-ФЗ, webhook 8 ч)
+- [x] README.md — секция «Демо» со ссылками на новые документы
+- [ ] видео-демо как fallback (по плану §1 demo_walkthrough — записывается организатором презентации, не в репо)
+- [x] финальная сверка `docs/deviations.md` — всё актуально, новых расхождений на smoke не выявлено
+- [ ] RELEASE-tag `v0.1.0-demo` (опционально — после merge PR)
+
+**Артефакт:** все 5 CI-джобов зелёные (test, lint, security, migrate, web). ✅
 
 ---
 
-## Чеклист готовности к демо (см. план §24) ⬜
+## Чеклист готовности к демо (см. план §24) ✅
 
-Заполняется в день 20.
+### Технический (бот)
+
+- [x] `make docker-up` поднимает всё с нуля (postgres + migrate + bot + web), миграции применяются автоматически (10 файлов)
+- [ ] **токен MAX в `.env` — рабочий** — заполняется организатором стенда перед демо (см. `docs/demo_walkthrough.md` §0)
+- [x] бот при старте делает `ping max api`, при невалидном токене падает с понятной ошибкой (smoke на fake-токене)
+- [x] три seed-мероприятия видны в списке (`20260101000010_seed_demo_event.sql`)
+- [x] первая запись требует согласие на обработку ПДн (`StateAwaitConsent`, фиксация `users.consent_policy_ver`)
+- [x] полный сценарий запись → подтверждение → QR в чате → статус → отмена реализован (Days 6–8)
+- [x] QR-картинка отправляется через `SendWithResult` + `qr_sent_message_id` (Day 15)
+- [x] кнопка «Показать мой QR» в «Моих записях» перегенерирует картинку из `attendance_code`
+- [x] `/forget_me` каскадно удаляет данные (`repo.Users.ForgetMe`, FK ON DELETE CASCADE/SET NULL)
+- [x] AI-подбор возвращает ответ или корректно деградирует (`ErrAIUnavailable` → fallback в обычный список)
+- [x] рассылка через scheduler-job `dispatchDue` (1 мин, RPS 20)
+- [x] напоминания планируются `scheduleReminders` (5 мин tick, окно 25 ч, идемпотентно через `uniq_notif_dedup`)
+- [x] graceful shutdown (контексты, `scheduler.Stop()` в `Shutdown`)
+
+### Технический (веб-админка)
+
+- [x] `/admin_login` в боте присылает magic-link (`service/auth.go`)
+- [x] `/auth?t=<jwt>` → `POST /api/auth/exchange` → httpOnly cookie `session_jwt` → редирект на `/dashboard`
+- [x] список своих событий + статистика на `/dashboard` (через `/api/events`)
+- [x] страница `/events/[id]/participants` с поиском (debounce, серверная пагинация)
+- [x] `/events/[id]/broadcast` — форма рассылки с «AI-улучшить»
+- [x] `/checkin` — `@yudiel/react-qr-scanner` + ручной ввод attendance code
+- [x] `POST /api/checkin` обрабатывает скан, ставит `attended`; повторный скан и чужое событие отвечают понятной ошибкой
+- [x] `RequireEventOwner` middleware защищает event-scoped endpoints (organizer чужого события → 403)
+- [x] CSRF Origin guard на mutating endpoints, SameSite=Strict на cookie (см. `SECURITY.md`)
+- [x] logout (`POST /api/auth/logout`) очищает cookie, повторный заход → `/auth/login`
+- [x] ротация `ADMIN_SESSION_KEY` инвалидирует все живые сессии (документировано в `docs/runbook.md` §5)
+- [x] `next build` без warnings TypeScript / ESLint (web-job CI зелёный)
+
+### Безопасность и операции
+
+- [x] логи структурированные (slog JSON), PII маскируется (`internal/pkg/secret.Mask*`)
+- [x] webhook-secret валидируется `secret.ConstantTimeEqual`; `.env.example` явно требует 5..256 символов `[a-zA-Z0-9_-]`
+- [x] `ADMIN_SESSION_KEY` ≥ 32 символа (валидация в `Config.Validate`)
+- [x] `gosec` и `govulncheck` чистые в CI (с #nosec комментариями на 3 обоснованных false-positive)
+- [x] `SECURITY.md` закоммичен (Day 19)
+- [x] `docs/runbook.md` описывает ротацию секретов и реакцию на инциденты (webhook 8 ч, 152-ФЗ запросы)
+- [ ] HTTPS на публичных endpoint'ах — настраивается ingress'ом стенда (Caddy/Nginx), не задача репо
+- [ ] резервное видео демо — записывается перед презентацией, не коммитим в репо
