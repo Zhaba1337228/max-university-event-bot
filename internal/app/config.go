@@ -37,6 +37,11 @@ type MaxConfig struct {
 	WebhookSecret string        `env:"WEBHOOK_SECRET"`
 	HTTPTimeout   time.Duration `env:"HTTP_TIMEOUT" envDefault:"30s"`
 	Debug         bool          `env:"DEBUG"`
+
+	// DevSkipPing — выключает ping MAX API на старте, long-poll и scheduler.
+	// Назначение: локальная разработка веб-админки без реального MAX_BOT_TOKEN.
+	// В проде ВСЕГДА false. Включается только переменной MAX_BOT_DEV_SKIP_PING=true.
+	DevSkipPing bool `env:"DEV_SKIP_PING"`
 }
 
 // HTTPConfig — webhook/healthz сервер бота.
