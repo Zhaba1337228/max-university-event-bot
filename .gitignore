@@ -27,8 +27,8 @@ coverage.html
 Thumbs.db
 
 # Frontend (Day 14+)
-/frontend/node_modules/
-/frontend/.next/
-/frontend/out/
-/frontend/build/
-/frontend/.turbo/
+/web/node_modules/
+/web/.next/
+/web/out/
+/web/build/
+/web/.turbo/

@@ -199,3 +199,31 @@ jobs:
           /tmp/migrate down
           /tmp/migrate up
           /tmp/migrate status
+
+  # =========================================================================
+  # web: Next.js build (lint/typecheck/build standalone)
+  # =========================================================================
+  web:
+    name: web (next build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package.json
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build (next build, standalone)
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"

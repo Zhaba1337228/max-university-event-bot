@@ -54,5 +54,26 @@ services:
       - no-new-privileges:true
     # USER уже задан в Dockerfile (app:10001), не root.
 
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    depends_on:
+      - bot
+    environment:
+      # Next.js rewrites /api/* → бэкенд по docker-сети.
+      API_UPSTREAM: http://bot:8081
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   pgdata:
