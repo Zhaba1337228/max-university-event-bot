@@ -97,16 +97,21 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	}
 	a.max = mc
 
-	botInfo, err := mc.Ping(ctx)
-	if err != nil {
-		a.closeQuietly()
-		return nil, fmt.Errorf("ping max api: %w", err)
+	if cfg.Max.DevSkipPing {
+		log.Warn("MAX_BOT_DEV_SKIP_PING=true — MAX API ping/long-poll/scheduler disabled. " +
+			"Admin API запустится для локальной отладки веб-админки, но бот не будет принимать апдейты.")
+	} else {
+		botInfo, err := mc.Ping(ctx)
+		if err != nil {
+			a.closeQuietly()
+			return nil, fmt.Errorf("ping max api: %w", err)
+		}
+		log.Info("max bot online",
+			"bot_id", botInfo.UserId,
+			"name", botInfo.Name,
+			"username", botInfo.Username,
+		)
 	}
-	log.Info("max bot online",
-		"bot_id", botInfo.UserId,
-		"name", botInfo.Name,
-		"username", botInfo.Username,
-	)
 
 	// Notification service зависит от mc — конструируем после Ping.
 	notifSvc := service.NewNotification(pool, notifsRepo, regsRepo, eventsRepo,
@@ -209,15 +214,19 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	}
 
 	// Day 16: scheduler — reminders + dispatch + purge.
-	sched, err := scheduler.New(scheduler.Config{
-		ReminderHoursCSV: cfg.Business.ReminderHoursCSV,
-	}, log,
-		notifsRepo, eventsRepo, regsRepo, usersRepo, statesRepo, pool, mc)
-	if err != nil {
-		a.closeQuietly()
-		return nil, fmt.Errorf("scheduler: %w", err)
+	// В DEV_SKIP_PING пропускаем — без рабочего MAX API job'ы будут только
+	// логгировать 401 каждую минуту.
+	if !cfg.Max.DevSkipPing {
+		sched, err := scheduler.New(scheduler.Config{
+			ReminderHoursCSV: cfg.Business.ReminderHoursCSV,
+		}, log,
+			notifsRepo, eventsRepo, regsRepo, usersRepo, statesRepo, pool, mc)
+		if err != nil {
+			a.closeQuietly()
+			return nil, fmt.Errorf("scheduler: %w", err)
+		}
+		a.scheduler = sched
 	}
-	a.scheduler = sched
 
 	return a, nil
 }
@@ -250,8 +259,13 @@ func (a *App) Run(ctx context.Context) error {
 
 	switch a.cfg.Max.Mode {
 	case "longpoll":
-		// Long-poll работает в основной горутине; завершится при ctx.Done().
-		a.longpoll.Run(ctx, a.updates)
+		if a.cfg.Max.DevSkipPing {
+			a.log.Info("long-poll skipped (DEV_SKIP_PING); blocking until ctx.Done()")
+			<-ctx.Done()
+		} else {
+			// Long-poll работает в основной горутине; завершится при ctx.Done().
+			a.longpoll.Run(ctx, a.updates)
+		}
 	case "webhook":
 		// Регистрируем подписку (если ещё нет — Subscribe; если есть — пропускаем).
 		if err := a.ensureSubscription(ctx); err != nil {

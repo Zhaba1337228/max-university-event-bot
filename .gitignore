@@ -2,6 +2,8 @@
 /bin/
 /vendor/
 *.exe
+# Локально собранный CLI (cmd/devmagic).
+/devmagic
 
 # Logs
 *.log

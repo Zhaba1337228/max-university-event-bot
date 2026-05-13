@@ -58,11 +58,13 @@ services:
     build:
       context: ../web
       dockerfile: Dockerfile
+      args:
+        # next.config.mjs бакает rewrites destination в build-time, поэтому
+        # API_UPSTREAM передаём как build-arg, а не runtime ENV.
+        API_UPSTREAM: http://bot:8081
     depends_on:
       - bot
     environment:
-      # Next.js rewrites /api/* → бэкенд по docker-сети.
-      API_UPSTREAM: http://bot:8081
       NODE_ENV: production
     ports:
       - "3000:3000"
