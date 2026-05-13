@@ -9,8 +9,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"time"
 
 	"github.com/max-messenger/max-bot-api-client-go/schemes"
+
+	"github.com/Zhaba1337228/max-university-event-bot/internal/pkg/ratelimit"
 )
 
 // Dispatcher — главный цикл бота.
@@ -18,6 +22,12 @@ type Dispatcher struct {
 	log      *slog.Logger
 	handlers *Handlers
 	pool     chan struct{}
+
+	// Per-user rate limiters (§19.7 плана):
+	//   text     — 2 rps, burst 5  (защита от flood в reg_full_name и т.п.)
+	//   callback — 5 rps, burst 10 (быстрые клики на пейджинации)
+	rlText     *ratelimit.Limiter
+	rlCallback *ratelimit.Limiter
 }
 
 // NewDispatcher создаёт диспетчер.
@@ -28,9 +38,11 @@ func NewDispatcher(log *slog.Logger, h *Handlers, parallelism int) *Dispatcher {
 		parallelism = 32
 	}
 	return &Dispatcher{
-		log:      log.With("component", "dispatcher"),
-		handlers: h,
-		pool:     make(chan struct{}, parallelism),
+		log:        log.With("component", "dispatcher"),
+		handlers:   h,
+		pool:       make(chan struct{}, parallelism),
+		rlText:     ratelimit.New(2, 5, 5*time.Minute),
+		rlCallback: ratelimit.New(5, 10, 5*time.Minute),
 	}
 }
 
@@ -76,8 +88,18 @@ func (d *Dispatcher) handle(ctx context.Context, u schemes.UpdateInterface) {
 	case *schemes.BotStartedUpdate:
 		d.handlers.Start.OnBotStarted(ctx, upd)
 	case *schemes.MessageCreatedUpdate:
+		uid := upd.Message.Sender.UserId
+		if !d.rlText.Allow(strconv.FormatInt(uid, 10)) {
+			d.log.Warn("rate limit hit (text)", "user_id", uid)
+			return
+		}
 		d.handlers.RouteMessage(ctx, upd)
 	case *schemes.MessageCallbackUpdate:
+		uid := upd.Callback.User.UserId
+		if !d.rlCallback.Allow(strconv.FormatInt(uid, 10)) {
+			d.log.Warn("rate limit hit (callback)", "user_id", uid)
+			return
+		}
 		d.handlers.RouteCallback(ctx, upd)
 	default:
 		// Не реагируем на ChatTitleChanged, BotRemoved и т.п. — для MVP не нужно.

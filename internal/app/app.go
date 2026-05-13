@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/transport/adminapi"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/transport/longpoll"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/transport/webhook"
 )
 
 // App собирает все зависимости и предоставляет Run/Shutdown.
@@ -39,6 +39,7 @@ type App struct {
 
 	dispatcher *bot.Dispatcher
 	longpoll   *longpoll.Runner
+	webhook    *webhook.Server
 	adminAPI   *adminapi.Server
 
 	updates chan schemes.UpdateInterface
@@ -164,6 +165,16 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	a.longpoll = longpoll.New(mc, log)
 	a.updates = make(chan schemes.UpdateInterface, 256)
 
+	// Day 18: webhook сервер (опционален, только при MAX_BOT_MODE=webhook).
+	if cfg.Max.Mode == "webhook" {
+		a.webhook = webhook.New(webhook.Config{
+			Addr:         cfg.HTTP.Addr,
+			Secret:       cfg.Max.WebhookSecret,
+			ReadTimeout:  cfg.HTTP.ReadTimeout,
+			WriteTimeout: cfg.HTTP.WriteTimeout,
+		}, log, a.updates)
+	}
+
 	return a, nil
 }
 
@@ -191,8 +202,13 @@ func (a *App) Run(ctx context.Context) error {
 		// Long-poll работает в основной горутине; завершится при ctx.Done().
 		a.longpoll.Run(ctx, a.updates)
 	case "webhook":
-		// День 18 — webhook сервер на :8080.
-		return errors.New("webhook mode is not implemented yet (день 18)")
+		// Регистрируем подписку (если ещё нет — Subscribe; если есть — пропускаем).
+		if err := a.ensureSubscription(ctx); err != nil {
+			a.log.Warn("ensure subscription failed (continue)", "err", err)
+		}
+		if err := a.webhook.Run(ctx); err != nil {
+			return fmt.Errorf("webhook: %w", err)
+		}
 	default:
 		return fmt.Errorf("unsupported mode: %s", a.cfg.Max.Mode)
 	}
@@ -216,4 +232,36 @@ func (a *App) closeQuietly() {
 		a.pool.Close()
 		a.pool = nil
 	}
+}
+
+// ensureSubscription проверяет, что в MAX уже зарегистрирован наш webhook URL
+// и при необходимости вызывает Subscribe. Идемпотентно: повторные вызовы
+// безопасны.
+//
+// План §13.4: MAX через 8 ч простоя автоматически отписывает webhook.
+// Поэтому при старте всегда переподписываемся, если своей нет.
+func (a *App) ensureSubscription(ctx context.Context) error {
+	subs, err := a.max.Raw().Subscriptions.GetSubscriptions(ctx)
+	if err != nil {
+		return fmt.Errorf("get subscriptions: %w", err)
+	}
+	wantURL := a.cfg.Max.WebhookURL
+	for _, s := range subs.Subscriptions {
+		if s.Url == wantURL {
+			a.log.Info("webhook subscription already exists", "url", wantURL)
+			return nil
+		}
+	}
+
+	updateTypes := []string{
+		string(schemes.TypeBotStarted),
+		string(schemes.TypeMessageCreated),
+		string(schemes.TypeMessageCallback),
+	}
+	if _, err := a.max.Raw().Subscriptions.Subscribe(ctx,
+		wantURL, updateTypes, a.cfg.Max.WebhookSecret); err != nil {
+		return fmt.Errorf("subscribe: %w", err)
+	}
+	a.log.Info("webhook subscribed", "url", wantURL, "types", updateTypes)
+	return nil
 }

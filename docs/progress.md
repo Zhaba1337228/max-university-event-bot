@@ -236,13 +236,60 @@
 
 ---
 
-## Дни 16-20 ⬜
+## День 17 — rate-limit per user ✅
 
+- [x] internal/pkg/ratelimit/ — потокобезопасный per-key token bucket с TTL-эвикцией
+- [x] Тесты: AllowConsumesTokens, AllowDifferentKeys, ConcurrentSafe, Size/Reset
+- [x] Подключено в Dispatcher: rlText (2 rps, burst 5), rlCallback (5 rps, burst 10)
+- [x] При срабатывании лимита — только warn-лог, без ответа пользователю (план §19.7)
+
+---
+
+## День 18 — webhook режим ✅
+
+- [x] internal/transport/webhook/parser.go — ParseUpdate (дублирует приватный SDK
+  bytesToProperUpdate для 5 типов: BotStarted, MessageCreated/Edited/Removed, Callback)
+- [x] internal/transport/webhook/server.go — http.Server с:
+  - POST /webhook/max + constant-time secret check (через secret.ConstantTimeEqual)
+  - GET /healthz для k8s healthcheck
+  - http.MaxBytesReader 1 MiB на body
+  - ReadHeaderTimeout 5s, ReadTimeout/WriteTimeout/IdleTimeout
+  - LRU-дедуп update_id (1024 элемента, TTL 10 мин)
+  - На любую ошибку парсинга → 200 OK (иначе MAX отпишет через 8 ч простоя)
+  - graceful shutdown 5s
+- [x] app.go::ensureSubscription: при старте webhook-режима проверяет
+  GetSubscriptions, если нашего URL нет — Subscribe с update_types
+  [bot_started, message_created, message_callback]
+- [x] app.Run переключает на webhook при MAX_BOT_MODE=webhook
+
+---
+
+## День 19 — security ✅ (SECURITY.md написан)
+
+- [x] SECURITY.md — полный документ по применённым мерам, ротации секретов,
+  152-ФЗ flow, реакции на инцидент, известным trade-offs.
+- [x] #nosec комментарии на 3 false-positive (G404 retry jitter, G101 docstring,
+  G118 graceful shutdown context)
+- [x] Все critical меры уже на месте: constant-time secret, маскировка PII,
+  параметризованный SQL, RBAC, FSM-guard на двухшаговых подтверждениях,
+  CSRF (Origin guard + SameSite=Strict), CORS, security headers.
+
+---
+
+## День 21 — Docker (бонус, по плану §21) ✅
+
+- [x] deployments/Dockerfile — multi-stage golang:1.25-alpine → alpine:3.20,
+  non-root USER app (uid=10001), trimpath+ldflags -s -w, healthcheck через /api/healthz
+- [x] deployments/docker-compose.yml — postgres + migrate + bot;
+  tmpfs:/tmp, cap_drop:ALL, no-new-privileges, env_file
+
+---
+
+## День 14, 16, 20 ⬜
+
+- [ ] **День 14** — Next.js frontend (пользователь отложил)
 - [ ] **День 16** — AI-сервисы (GigaChat) + scheduler с reminders
-- [ ] **День 17** — обработка ошибок и устойчивость, rate-limit per user
-- [ ] **День 18** — webhook-режим и полировка демо
-- [ ] **День 19** — security hardening, SECURITY.md
-- [ ] **День 20** — финальный прогон + резервное демо-видео
+- [ ] **День 20** — финальный smoke на чистом окружении + резервное демо-видео
 
 ---
 
