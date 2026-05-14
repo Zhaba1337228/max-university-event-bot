@@ -76,9 +76,24 @@ export type Registration = {
   contact_masked: string;
   contact?: string;
   source: string;
+  created_at?: string;
   registered_at?: string;
+  cancelled_at?: string;
   checkin_at?: string;
+  checkin_by?: number;
+  waitlist_position?: number;
   interest_program?: string;
+};
+
+// Participant — detailed user info for the check-in result card.
+// Returned by /api/checkin success + by `registration_*` 409 conflict bodies.
+export type Participant = {
+  id: number;
+  max_user_id: number;
+  role: Role;
+  full_name?: string;
+  phone?: string;
+  email?: string;
 };
 
 export type ListEventsResp = {
@@ -97,10 +112,25 @@ export type DashboardResp = {
   upcoming_events: number;
 };
 
+// CheckinResp — успешный 200 ответ. Поля participant/scanner добавлены в PR
+// «detailed check-in card»: волонтёру нужны реальные телефон/email и кто
+// именно отметил (для повторных сканов).
 export type CheckinResp = {
   already_done: boolean;
   registration: Registration;
   event: EventDTO;
+  participant?: Participant;
+  scanner?: Participant;
+};
+
+// CheckinErrorBody — 409 Conflict с подробной карточкой, если регистрация нашлась,
+// но её нельзя отметить (отменена / waitlist / no_show / окно закрыто).
+export type CheckinErrorBody = {
+  error: string;
+  message: string;
+  registration?: Registration;
+  event?: EventDTO;
+  participant?: Participant;
 };
 
 export type BroadcastResp = {

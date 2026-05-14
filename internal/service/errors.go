@@ -13,15 +13,18 @@ import "errors"
 
 // Регистрация / общая бизнес-логика.
 var (
-	ErrEventNotFound       = errors.New("event not found")
-	ErrEventClosed         = errors.New("event is not open for registration")
-	ErrAlreadyRegistered   = errors.New("user already registered")
-	ErrNoSeats             = errors.New("no seats available")
-	ErrWaitlistDisabled    = errors.New("waitlist is disabled for this event")
-	ErrConsentRequired     = errors.New("user consent required (152-FZ)")
-	ErrNotRegistered       = errors.New("user has no active registration")
-	ErrCheckinWindowClosed = errors.New("check-in window closed")
-	ErrAlreadyCheckedIn    = errors.New("already checked in")
+	ErrEventNotFound          = errors.New("event not found")
+	ErrEventClosed            = errors.New("event is not open for registration")
+	ErrAlreadyRegistered      = errors.New("user already registered")
+	ErrNoSeats                = errors.New("no seats available")
+	ErrWaitlistDisabled       = errors.New("waitlist is disabled for this event")
+	ErrConsentRequired        = errors.New("user consent required (152-FZ)")
+	ErrNotRegistered          = errors.New("user has no active registration")
+	ErrRegistrationCancelled  = errors.New("registration is cancelled")
+	ErrRegistrationOnWaitlist = errors.New("registration is on waitlist (not confirmed)")
+	ErrRegistrationNoShow     = errors.New("registration marked as no_show")
+	ErrCheckinWindowClosed    = errors.New("check-in window closed")
+	ErrAlreadyCheckedIn       = errors.New("already checked in")
 )
 
 // Профили / валидация ввода.
