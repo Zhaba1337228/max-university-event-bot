@@ -49,6 +49,21 @@ var (
 	ErrNotEventOwner = errors.New("user is not owner of this event")
 )
 
+// User admin operations.
+var (
+	ErrUserNotFound         = errors.New("user not found")
+	ErrUserInvalidRole      = errors.New("invalid role (allowed: applicant, organizer, staff, admin)")
+	ErrUserCannotChangeSelf = errors.New("admin cannot change own role")
+)
+
+// Manual attendance marking (web admin).
+var (
+	ErrManualMarkInvalidStatus = errors.New("manual mark status must be attended or no_show")
+	ErrRegistrationNotFound    = errors.New("registration not found")
+	ErrRegNotForEvent          = errors.New("registration does not belong to this event")
+	ErrRegNotActive            = errors.New("registration is cancelled and cannot be marked")
+)
+
 // AI.
 var (
 	ErrAIUnavailable = errors.New("ai service unavailable")

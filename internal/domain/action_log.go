@@ -29,6 +29,8 @@ const (
 	ActionAdminLogout          ActionType = "admin_logout"
 	ActionMarkedAttendedManual ActionType = "marked_attended_manually"
 	ActionMarkedNoShowManual   ActionType = "marked_no_show_manually"
+	ActionUserRoleChanged      ActionType = "user_role_changed"
+	ActionParticipantsExported ActionType = "participants_exported_csv"
 	ActionPIIUnmasked          ActionType = "pii_unmasked"
 	ActionCheckinScanned       ActionType = "checkin_scanned"
 

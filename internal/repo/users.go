@@ -101,6 +101,89 @@ WHERE id = $1`
 	return nil
 }
 
+// List возвращает страницу пользователей. Если roleFilter != "" — фильтр по role.
+// query — case-insensitive подстрока по full_name / phone / email.
+func (r *usersRepo) List(ctx context.Context, q Querier, roleFilter domain.Role, query string, limit, offset int) ([]*domain.User, int, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query = strings.TrimSpace(query)
+	pattern := "%" + strings.ToLower(query) + "%"
+
+	// Динамическая фильтрация. role=$1 (либо '' = без фильтра), query=$2.
+	var countStmt, listStmt string
+	if roleFilter == "" && query == "" {
+		countStmt = `SELECT COUNT(*) FROM users`
+		listStmt = `SELECT ` + userColumns + ` FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+		var total int
+		if err := q.QueryRow(ctx, countStmt).Scan(&total); err != nil {
+			return nil, 0, fmt.Errorf("count users: %w", err)
+		}
+		rows, err := q.Query(ctx, listStmt, limit, offset)
+		if err != nil {
+			return nil, 0, fmt.Errorf("list users: %w", err)
+		}
+		defer rows.Close()
+		out := make([]*domain.User, 0, limit)
+		for rows.Next() {
+			u := &domain.User{}
+			if err := scanUser(rows, u); err != nil {
+				return nil, 0, fmt.Errorf("scan user: %w", err)
+			}
+			out = append(out, u)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, 0, fmt.Errorf("iter users: %w", err)
+		}
+		return out, total, nil
+	}
+
+	// Фильтр + поиск (общая ветка).
+	roleStr := string(roleFilter)
+	countStmt = `
+SELECT COUNT(*) FROM users
+WHERE ($1 = '' OR role = $1)
+  AND ($2 = ''
+       OR LOWER(COALESCE(full_name, '')) LIKE $3
+       OR LOWER(COALESCE(phone, '')) LIKE $3
+       OR LOWER(COALESCE(email, '')) LIKE $3)`
+	listStmt = `
+SELECT ` + userColumns + `
+FROM users
+WHERE ($1 = '' OR role = $1)
+  AND ($2 = ''
+       OR LOWER(COALESCE(full_name, '')) LIKE $3
+       OR LOWER(COALESCE(phone, '')) LIKE $3
+       OR LOWER(COALESCE(email, '')) LIKE $3)
+ORDER BY created_at DESC
+LIMIT $4 OFFSET $5`
+
+	var total int
+	if err := q.QueryRow(ctx, countStmt, roleStr, query, pattern).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count users: %w", err)
+	}
+	rows, err := q.Query(ctx, listStmt, roleStr, query, pattern, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+	out := make([]*domain.User, 0, limit)
+	for rows.Next() {
+		u := &domain.User{}
+		if err := scanUser(rows, u); err != nil {
+			return nil, 0, fmt.Errorf("scan user: %w", err)
+		}
+		out = append(out, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iter users: %w", err)
+	}
+	return out, total, nil
+}
+
 // ForgetMe удаляет пользователя; FK CASCADE подчистит registrations,
 // action_logs (через target_user_id/actor_user_id с ON DELETE SET NULL),
 // notifications, user_states.

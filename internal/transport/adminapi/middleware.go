@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 )
 
@@ -42,6 +43,21 @@ func requireSession(auth service.Auth) func(http.Handler) http.Handler {
 func claimsFromContext(ctx context.Context) (*service.Claims, bool) {
 	c, ok := ctx.Value(claimsKey{}).(*service.Claims)
 	return c, ok
+}
+
+// requireAdmin — пускает только admin'ов (роль из JWT session claims).
+// Ставится поверх requireSession.
+func requireAdmin() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			c, ok := claimsFromContext(r.Context())
+			if !ok || c.Role != domain.RoleAdmin {
+				writeJSON(w, http.StatusForbidden, errResp("admin_required", "Раздел доступен только администраторам"))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // securityHeaders ставит базовый набор security-заголовков.

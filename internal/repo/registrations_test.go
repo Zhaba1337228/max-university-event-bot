@@ -190,6 +190,54 @@ func TestRegMarkAttended(t *testing.T) {
 	}
 }
 
+func TestRegMarkNoShow(t *testing.T) {
+	t.Parallel()
+	mock := newMockRegex(t)
+	regs := repo.NewRegistrations()
+
+	mock.ExpectExec(`UPDATE registrations\s+SET status = 'no_show'`).
+		WithArgs(int64(11), int64(22)).
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+
+	if err := regs.MarkNoShow(context.Background(), mock, 11, 22); err != nil {
+		t.Fatalf("MarkNoShow: %v", err)
+	}
+}
+
+func TestRegListByEventAllStatuses(t *testing.T) {
+	t.Parallel()
+	mock := newMockRegex(t)
+	regs := repo.NewRegistrations()
+
+	now := time.Now()
+	rows := pgxmock.NewRows(regCols()).
+		AddRow(int64(1), int64(10), int64(5), "registered", (*string)(nil),
+			"User A", "+79991110000", (*int)(nil),
+			&now, (*time.Time)(nil), "bot",
+			(*string)(nil), (*time.Time)(nil), (*int64)(nil), (*int64)(nil),
+			now, now).
+		AddRow(int64(2), int64(11), int64(5), "cancelled_by_user", (*string)(nil),
+			"User B", "userb@x.com", (*int)(nil),
+			&now, &now, "bot",
+			(*string)(nil), (*time.Time)(nil), (*int64)(nil), (*int64)(nil),
+			now, now)
+
+	mock.ExpectQuery(`FROM registrations WHERE event_id = \$1\s+ORDER BY`).
+		WithArgs(int64(5), 100, 0).
+		WillReturnRows(rows)
+
+	got, err := regs.ListByEventAllStatuses(context.Background(), mock, 5, 100, 0)
+	if err != nil {
+		t.Fatalf("ListByEventAllStatuses: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want 2 rows, got %d", len(got))
+	}
+	if got[0].Status != domain.RegStatusRegistered || got[1].Status != domain.RegStatusCancelledByUser {
+		t.Errorf("statuses mismatch: %v / %v", got[0].Status, got[1].Status)
+	}
+}
+
 func TestRegSetAttendanceCode(t *testing.T) {
 	t.Parallel()
 	mock := newMock(t)

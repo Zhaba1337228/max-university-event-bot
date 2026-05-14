@@ -26,6 +26,12 @@ type Attendance interface {
 	// CheckIn — отметка участника пришёдшим. scannerMaxUserID — max_user_id того,
 	// кто сканирует; он обязан иметь роль staff или admin (organizer получит ErrNotStaff).
 	CheckIn(ctx context.Context, scannerMaxUserID int64, qrPayload string) (*CheckInResult, error)
+
+	// ManualMark — ручная отметка attended/no_show из веб-админки без QR.
+	// actorID — local user id (organizer-owner / admin / staff).
+	// newStatus ∈ {RegStatusAttended, RegStatusNoShow}.
+	// Возвращает обновлённую регистрацию.
+	ManualMark(ctx context.Context, actorID, eventID, regID int64, newStatus domain.RegistrationStatus) (*domain.Registration, error)
 }
 
 // CheckInResult — что произошло.
@@ -159,6 +165,73 @@ func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64,
 		return nil, txErr
 	}
 	return result, nil
+}
+
+// ManualMark — ручная отметка attended/no_show. Используется веб-админкой,
+// когда QR не отсканирован (например, человек пришёл без телефона).
+// Доступ обязан проверить handler (organizer-owner / admin); сервис только
+// валидирует входящие данные и пишет в БД + audit_log.
+func (s *attendanceService) ManualMark(ctx context.Context, actorID, eventID, regID int64, newStatus domain.RegistrationStatus) (*domain.Registration, error) {
+	if newStatus != domain.RegStatusAttended && newStatus != domain.RegStatusNoShow {
+		return nil, ErrManualMarkInvalidStatus
+	}
+
+	var out *domain.Registration
+	txErr := s.inTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		reg, err := s.regs.Get(ctx, tx, regID)
+		if err != nil {
+			return fmt.Errorf("get registration: %w", err)
+		}
+		if reg == nil {
+			return ErrRegistrationNotFound
+		}
+		if reg.EventID != eventID {
+			return ErrRegNotForEvent
+		}
+		// Отменённые отмечать нельзя (это намеренная история, а не «забыли»).
+		if reg.Status == domain.RegStatusCancelledByUser || reg.Status == domain.RegStatusCancelledByOrganizer {
+			return ErrRegNotActive
+		}
+
+		var (
+			action domain.ActionType
+		)
+		switch newStatus {
+		case domain.RegStatusAttended:
+			if err := s.regs.MarkAttended(ctx, tx, reg.ID, actorID); err != nil {
+				return fmt.Errorf("mark attended: %w", err)
+			}
+			action = domain.ActionMarkedAttendedManual
+			now := time.Now()
+			reg.Status = domain.RegStatusAttended
+			reg.CheckinAt = &now
+			reg.CheckinBy = &actorID
+		case domain.RegStatusNoShow:
+			if err := s.regs.MarkNoShow(ctx, tx, reg.ID, actorID); err != nil {
+				return fmt.Errorf("mark no_show: %w", err)
+			}
+			action = domain.ActionMarkedNoShowManual
+			reg.Status = domain.RegStatusNoShow
+			reg.CheckinBy = &actorID
+		}
+
+		evID := reg.EventID
+		target := reg.UserID
+		rID := reg.ID
+		_ = s.logs.Append(ctx, tx, &domain.ActionLog{
+			ActorUserID:    &actorID,
+			TargetUserID:   &target,
+			EventID:        &evID,
+			RegistrationID: &rID,
+			Action:         action,
+		})
+		out = reg
+		return nil
+	})
+	if txErr != nil {
+		return nil, txErr
+	}
+	return out, nil
 }
 
 func (s *attendanceService) inTx(ctx context.Context, fn func(ctx context.Context, tx pgx.Tx) error) error {

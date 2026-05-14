@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api, HttpError } from "@/lib/api";
-import { ParticipantsResp } from "@/lib/types";
+import { ParticipantsResp, Registration } from "@/lib/types";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,41 @@ export default function ParticipantsPage() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  const [marking, setMarking] = useState<Record<number, boolean>>({});
+
+  async function mark(regID: number, status: "attended" | "no_show") {
+    setMarking((m) => ({ ...m, [regID]: true }));
+    try {
+      const resp = await api.post<{ registration: Registration }>(
+        `/api/events/${id}/registrations/${regID}/mark`,
+        { status },
+      );
+      // Локально обновляем строку.
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((r) =>
+                r.id === regID ? { ...r, ...resp.registration } : r,
+              ),
+            }
+          : prev,
+      );
+    } catch (e) {
+      setErr(
+        e instanceof HttpError && e.body?.message
+          ? e.body.message
+          : "Не удалось отметить",
+      );
+    } finally {
+      setMarking((m) => {
+        const next = { ...m };
+        delete next[regID];
+        return next;
+      });
+    }
+  }
 
   async function load(o = offset, query = q) {
     setErr(null);
@@ -61,11 +96,25 @@ export default function ParticipantsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href={`/events/${id}`} className="text-sm text-subtle no-underline hover:text-text">
-          ← К мероприятию
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold">Участники</h1>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <Link href={`/events/${id}`} className="text-sm text-subtle no-underline hover:text-text">
+            ← К мероприятию
+          </Link>
+          <h1 className="mt-1 text-2xl font-semibold">Участники</h1>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/events/${id}/audit`}>
+            <Button variant="secondary" type="button">
+              Журнал действий
+            </Button>
+          </Link>
+          <a href={`/api/events/${id}/participants.csv`} download>
+            <Button variant="primary" type="button">
+              Скачать CSV
+            </Button>
+          </a>
+        </div>
       </div>
 
       {err && <p className="text-danger">{err}</p>}
@@ -125,6 +174,24 @@ export default function ParticipantsPage() {
                         Интерес: <span className="text-text">{r.interest_program}</span>
                       </div>
                     )}
+                    <div className="mt-2 flex gap-2">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        disabled={!!marking[r.id] || r.status === "attended"}
+                        onClick={() => mark(r.id, "attended")}
+                      >
+                        ✓ Пришёл
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={!!marking[r.id] || r.status === "no_show" || r.status.startsWith("cancelled")}
+                        onClick={() => mark(r.id, "no_show")}
+                      >
+                        ✗ Не пришёл
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -139,6 +206,7 @@ export default function ParticipantsPage() {
                       <th className="py-2 pr-3 font-medium">Интерес</th>
                       <th className="py-2 pr-3 font-medium">Записан</th>
                       <th className="py-2 pr-3 font-medium">Check-in</th>
+                      <th className="py-2 font-medium">Действия</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -150,6 +218,30 @@ export default function ParticipantsPage() {
                         <td className="py-2 pr-3">{fmtDate(r.registered_at)}</td>
                         <td className={"py-2 pr-3 " + (r.checkin_at ? "text-success" : "")}>
                           {r.checkin_at ? fmtDate(r.checkin_at) : "—"}
+                        </td>
+                        <td className="py-2">
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="primary"
+                              disabled={!!marking[r.id] || r.status === "attended"}
+                              onClick={() => mark(r.id, "attended")}
+                            >
+                              ✓ Пришёл
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={
+                                !!marking[r.id] ||
+                                r.status === "no_show" ||
+                                r.status.startsWith("cancelled")
+                              }
+                              onClick={() => mark(r.id, "no_show")}
+                            >
+                              ✗ Не пришёл
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
