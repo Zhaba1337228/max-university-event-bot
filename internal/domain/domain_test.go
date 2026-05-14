@@ -59,6 +59,51 @@ func TestUserRoles(t *testing.T) {
 	}
 }
 
+// Staff = волонтёр на входе. IsStaff отвечает за доступ к check-in.
+// Admin покрывает обе ветки (organizer + staff). Organizer и applicant — нет.
+func TestUserIsStaff(t *testing.T) {
+	t.Parallel()
+
+	if (*domain.User)(nil).IsStaff() {
+		t.Error("nil user must not be staff")
+	}
+
+	cases := map[domain.Role]bool{
+		domain.RoleApplicant: false,
+		domain.RoleOrganizer: false, // ключевое: организатор не имеет права сканировать QR
+		domain.RoleStaff:     true,
+		domain.RoleAdmin:     true,
+	}
+	for r, want := range cases {
+		u := &domain.User{Role: r}
+		if got := u.IsStaff(); got != want {
+			t.Errorf("IsStaff(role=%q): want %v, got %v", r, want, got)
+		}
+	}
+}
+
+// CanAccessAdminPanel: applicant отрезан, остальные пускаются.
+func TestCanAccessAdminPanel(t *testing.T) {
+	t.Parallel()
+
+	if (*domain.User)(nil).CanAccessAdminPanel() {
+		t.Error("nil user must not access admin panel")
+	}
+
+	cases := map[domain.Role]bool{
+		domain.RoleApplicant: false,
+		domain.RoleOrganizer: true,
+		domain.RoleStaff:     true,
+		domain.RoleAdmin:     true,
+	}
+	for r, want := range cases {
+		u := &domain.User{Role: r}
+		if got := u.CanAccessAdminPanel(); got != want {
+			t.Errorf("CanAccessAdminPanel(role=%q): want %v, got %v", r, want, got)
+		}
+	}
+}
+
 func TestRegistrationStatusActive(t *testing.T) {
 	t.Parallel()
 

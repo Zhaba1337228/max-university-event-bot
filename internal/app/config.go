@@ -88,6 +88,7 @@ type GigaChatConfig struct {
 type BusinessConfig struct {
 	ReminderHoursCSV    string  `env:"DEFAULT_EVENT_REMINDER_HOURS" envDefault:"24,1"`
 	OrganizerUserIDs    []int64 `env:"ORGANIZER_USER_IDS" envSeparator:","`
+	StaffUserIDs        []int64 `env:"STAFF_USER_IDS"     envSeparator:","`
 	AdminUserIDs        []int64 `env:"ADMIN_USER_IDS"     envSeparator:","`
 	WaitlistEnabled     bool    `env:"WAITLIST_ENABLED"      envDefault:"true"`
 	WaitlistAutoPromote bool    `env:"WAITLIST_AUTO_PROMOTE" envDefault:"true"`

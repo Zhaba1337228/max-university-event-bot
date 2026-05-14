@@ -10,10 +10,11 @@
 //   - DATABASE_URL — Postgres URL для look-up пользователя;
 //   - ADMIN_WEB_BASE_URL — база URL веб-админки (default: http://localhost:3000).
 //
-// Пользователь должен заранее существовать в БД и быть organizer/admin.
-// Если нет — засеять через psql (схема: migrations/20260101000001_init_users.sql):
+// Пользователь должен заранее существовать в БД и иметь роль organizer / staff / admin.
+// Если нет — засеять через psql:
 //
 //	INSERT INTO users(max_user_id, role) VALUES (999999, 'organizer');
+//	INSERT INTO users(max_user_id, role) VALUES (888888, 'staff');
 package main
 
 import (
@@ -81,8 +82,8 @@ func run() error {
 	if u == nil {
 		return fmt.Errorf("user id=%d not found", userID)
 	}
-	if !u.IsOrganizer() {
-		return fmt.Errorf("user id=%d role=%q — not organizer/admin", userID, u.Role)
+	if !u.CanAccessAdminPanel() {
+		return fmt.Errorf("user id=%d role=%q — not organizer/staff/admin", userID, u.Role)
 	}
 
 	token, err := auth.IssueMagic(ctx, u.MaxUserID)

@@ -18,12 +18,14 @@ import (
 // CheckIn срабатывает на каждый успешный скан камерой:
 //  1. ParseQRPayload (отсекаем чужие QR);
 //  2. GetByCodeForUpdate (блокировка строки регистрации);
-//  3. проверка ownership события (organizer/admin);
+//  3. проверка прав: сканирующий должен быть staff/admin (organizer-овнер события не сканирует QR-коды);
 //  4. проверка статуса регистрации (active);
 //  5. проверка окна check-in [starts_at - 2h, ends_at + 4h];
 //  6. MarkAttended; ActionLog.checkin_scanned.
 type Attendance interface {
-	CheckIn(ctx context.Context, organizerMaxUserID int64, qrPayload string) (*CheckInResult, error)
+	// CheckIn — отметка участника пришёдшим. scannerMaxUserID — max_user_id того,
+	// кто сканирует; он обязан иметь роль staff или admin (organizer получит ErrNotStaff).
+	CheckIn(ctx context.Context, scannerMaxUserID int64, qrPayload string) (*CheckInResult, error)
 }
 
 // CheckInResult — что произошло.
@@ -64,9 +66,14 @@ const (
 	checkinPostWindow = 4 * time.Hour
 )
 
-func (s *attendanceService) CheckIn(ctx context.Context, organizerMaxUserID int64, payload string) (*CheckInResult, error) {
+func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64, payload string) (*CheckInResult, error) {
 	parsed, err := s.qr.ParseQRPayload(payload)
 	if err != nil {
+		return nil, err
+	}
+
+	// Права на check-in: только staff/admin (organizer сканерит не должен).
+	if _, err := s.role.RequireStaff(ctx, scannerMaxUserID); err != nil {
 		return nil, err
 	}
 
@@ -82,11 +89,6 @@ func (s *attendanceService) CheckIn(ctx context.Context, organizerMaxUserID int6
 		if reg.EventID != parsed.EventID {
 			// QR от другого события — не должен сработать.
 			return fmt.Errorf("%w: event mismatch", ErrNotRegistered)
-		}
-
-		// Проверка прав организатора на это событие.
-		if _, err := s.role.RequireEventOwner(ctx, organizerMaxUserID, reg.EventID); err != nil {
-			return err
 		}
 
 		// Состояние записи.
@@ -122,19 +124,19 @@ func (s *attendanceService) CheckIn(ctx context.Context, organizerMaxUserID int6
 		}
 
 		// Кто сканировал — нужен local user_id.
-		organizer, err := s.users.GetByMaxID(ctx, tx, organizerMaxUserID)
+		scanner, err := s.users.GetByMaxID(ctx, tx, scannerMaxUserID)
 		if err != nil {
-			return fmt.Errorf("lookup organizer: %w", err)
+			return fmt.Errorf("lookup scanner: %w", err)
 		}
-		if organizer == nil {
-			return ErrNotOrganizer
+		if scanner == nil {
+			return ErrNotStaff
 		}
 
-		if err := s.regs.MarkAttended(ctx, tx, reg.ID, organizer.ID); err != nil {
+		if err := s.regs.MarkAttended(ctx, tx, reg.ID, scanner.ID); err != nil {
 			return fmt.Errorf("mark attended: %w", err)
 		}
 
-		actorID := organizer.ID
+		actorID := scanner.ID
 		target := reg.UserID
 		evID := ev.ID
 		regID := reg.ID
@@ -149,7 +151,7 @@ func (s *attendanceService) CheckIn(ctx context.Context, organizerMaxUserID int6
 		reg.Status = domain.RegStatusAttended
 		nowVal := time.Now()
 		reg.CheckinAt = &nowVal
-		reg.CheckinBy = &organizer.ID
+		reg.CheckinBy = &scanner.ID
 		result = &CheckInResult{Registration: reg, Event: ev, AlreadyDone: false}
 		return nil
 	})

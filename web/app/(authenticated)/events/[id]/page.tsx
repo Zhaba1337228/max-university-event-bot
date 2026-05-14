@@ -4,15 +4,17 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { api, HttpError } from "@/lib/api";
-import { EventDetail } from "@/lib/types";
+import { EventDetail, canCheckin } from "@/lib/types";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fmtDate, statusBadge, statusLabel } from "@/lib/format";
+import { useMe } from "@/components/me-context";
 
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const me = useMe();
   const id = Number(params.id);
   const [data, setData] = useState<EventDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -69,14 +71,14 @@ export default function EventDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <Link href="/events" className="text-sm text-subtle no-underline hover:text-text">
             ← К списку
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold">{ev.title}</h1>
+          <h1 className="mt-1 break-words text-2xl font-semibold sm:text-3xl">{ev.title}</h1>
         </div>
-        <Badge className={statusBadge(ev.status)}>{statusLabel(ev.status)}</Badge>
+        <Badge className={statusBadge(ev.status) + " self-start"}>{statusLabel(ev.status)}</Badge>
       </div>
 
       {toast && <p className="text-subtle">{toast}</p>}
@@ -110,12 +112,12 @@ export default function EventDetailPage() {
           {!st ? (
             <p className="text-subtle">Нет данных</p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-7">
               <StatBox label="Зарегистр." value={st.registered} />
               <StatBox label="Свободно" value={st.free_seats} />
               <StatBox label="Лист ожид." value={st.waitlist} />
               <StatBox label="Отменили" value={st.cancelled} />
-              <StatBox label="Пришли" value={st.attended} />
+              <StatBox label="Пришли" value={st.attended} highlight />
               <StatBox label="Не пришли" value={st.no_show} />
               <StatBox label="Вместим." value={st.capacity} />
             </div>
@@ -158,9 +160,13 @@ export default function EventDetailPage() {
               Открыть регистрацию
             </Button>
           )}
-          <Link href={`/checkin?event=${id}`}>
-            <Button variant="secondary">Check-in (камера)</Button>
-          </Link>
+          {/* Кнопка сканера видна только тем, кто имеет право на check-in (staff/admin).
+              Для организатора она скрыта — QR-кодами гостей он не занимается. */}
+          {canCheckin(me.user.role) && (
+            <Link href={`/checkin?event=${id}`}>
+              <Button variant="secondary">Check-in (камера)</Button>
+            </Link>
+          )}
         </CardBody>
       </Card>
     </div>
@@ -176,11 +182,20 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatBox({ label, value }: { label: string; value: number }) {
+function StatBox({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
   return (
-    <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
+    <div
+      className={
+        "rounded-md border px-3 py-2 " +
+        (highlight
+          ? "border-success/30 bg-success/10"
+          : "border-border bg-muted/40")
+      }
+    >
       <div className="text-xs text-subtle">{label}</div>
-      <div className="mt-0.5 text-lg font-semibold">{value}</div>
+      <div className={"mt-0.5 text-lg font-semibold " + (highlight ? "text-success" : "")}>
+        {value}
+      </div>
     </div>
   );
 }

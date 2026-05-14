@@ -79,9 +79,11 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	actionLogSvc := service.NewActionLog(pool, logsRepo)
 	roleSvc := service.NewRole(pool, usersRepo, eventsRepo, log)
 
-	// Bootstrap ролей из env (organizer/admin user IDs).
+	// Bootstrap ролей из env (organizer/staff/admin user IDs).
 	if err := roleSvc.Bootstrap(ctx,
-		cfg.Business.OrganizerUserIDs, cfg.Business.AdminUserIDs); err != nil {
+		cfg.Business.OrganizerUserIDs,
+		cfg.Business.StaffUserIDs,
+		cfg.Business.AdminUserIDs); err != nil {
 		log.Warn("role bootstrap failed (continuing without)", "err", err)
 	}
 

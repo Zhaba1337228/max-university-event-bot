@@ -6,7 +6,6 @@ import { api, HttpError } from "@/lib/api";
 import { EventDTO, ListEventsResp } from "@/lib/types";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { fmtDate, statusBadge, statusLabel } from "@/lib/format";
 
 type Tab = "mine" | "open";
@@ -48,21 +47,29 @@ export default function EventsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Мероприятия</h1>
-        <div className="flex gap-2">
-          <Button
-            variant={tab === "mine" ? "primary" : "secondary"}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-semibold sm:text-3xl">Мероприятия</h1>
+        <div className="inline-flex rounded-md border border-border bg-muted p-0.5">
+          <button
+            type="button"
             onClick={() => setTab("mine")}
+            className={
+              "rounded-[6px] px-3 py-1.5 text-sm font-medium transition-colors " +
+              (tab === "mine" ? "bg-accent text-white" : "text-subtle hover:text-text")
+            }
           >
             Мои
-          </Button>
-          <Button
-            variant={tab === "open" ? "primary" : "secondary"}
+          </button>
+          <button
+            type="button"
             onClick={() => setTab("open")}
+            className={
+              "rounded-[6px] px-3 py-1.5 text-sm font-medium transition-colors " +
+              (tab === "open" ? "bg-accent text-white" : "text-subtle hover:text-text")
+            }
           >
             Все открытые
-          </Button>
+          </button>
         </div>
       </div>
 

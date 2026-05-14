@@ -34,6 +34,7 @@ var (
 var (
 	ErrAccessDenied  = errors.New("access denied")
 	ErrNotOrganizer  = errors.New("user is not an organizer")
+	ErrNotStaff      = errors.New("user is not staff/admin")
 	ErrNotEventOwner = errors.New("user is not owner of this event")
 )
 
