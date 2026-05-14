@@ -187,10 +187,10 @@ func (s *Server) handleListParticipants(w http.ResponseWriter, r *http.Request) 
 type eventInputDTO struct {
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
-	StartsAt    string   `json:"starts_at"`        // RFC3339
+	StartsAt    string   `json:"starts_at"`         // RFC3339
 	EndsAt      string   `json:"ends_at,omitempty"` // RFC3339, optional
 	Location    string   `json:"location"`
-	Format      string   `json:"format"`           // offline|online|hybrid
+	Format      string   `json:"format"` // offline|online|hybrid
 	Capacity    int      `json:"capacity"`
 	Status      string   `json:"status,omitempty"` // open|closed (только для update)
 	Tags        []string `json:"tags"`
