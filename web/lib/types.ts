@@ -48,7 +48,28 @@ export type EventDTO = {
   tags: string[] | null;
   free_seats?: number;
   short_summary?: string;
+  created_by?: number;
 };
+
+export type EventInput = {
+  title: string;
+  description: string;
+  starts_at: string; // RFC3339
+  ends_at?: string; // RFC3339
+  location: string;
+  format: "offline" | "online" | "hybrid";
+  capacity: number;
+  status?: "open" | "closed"; // только для update
+  tags: string[];
+};
+
+// canEditEvent — пользователь может редактировать мероприятие, если он
+// admin или владелец (created_by совпадает с me.user.id).
+export function canEditEvent(role: Role, meID: number, createdBy?: number): boolean {
+  if (role === "admin") return true;
+  if (role !== "organizer") return false;
+  return typeof createdBy === "number" && createdBy === meID;
+}
 
 export type EventStats = {
   capacity: number;

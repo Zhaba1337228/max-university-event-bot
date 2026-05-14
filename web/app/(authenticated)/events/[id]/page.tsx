@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { api, HttpError } from "@/lib/api";
-import { EventDetail, canCheckin } from "@/lib/types";
+import { EventDetail, canCheckin, canEditEvent } from "@/lib/types";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -151,6 +151,11 @@ export default function EventDetailPage() {
           <Link href={`/events/${id}/broadcast`}>
             <Button variant="secondary">Рассылка</Button>
           </Link>
+          {canEditEvent(me.user.role, me.user.id, ev.created_by) && (
+            <Link href={`/events/${id}/edit`}>
+              <Button variant="secondary">Редактировать</Button>
+            </Link>
+          )}
           {ev.status === "open" ? (
             <Button variant="danger" disabled={busy} onClick={() => toggleStatus("close")}>
               Закрыть регистрацию

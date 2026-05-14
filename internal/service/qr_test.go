@@ -64,8 +64,16 @@ func TestEncrypted_TamperedDetected(t *testing.T) {
 	code := qr.NewAttendanceCode()
 	payload := qr.BuildQRPayload(1, code)
 
-	// Меняем последний символ base64 — GCM auth-tag должен расстроиться.
-	tampered := payload[:len(payload)-1] + flipChar(payload[len(payload)-1])
+	// Меняем символ ВНУТРИ base64-тела (не последний — в RawURL последний
+	// символ кодирует неполный квант битов, его flip может не изменить
+	// декодированные байты и GCM пройдёт). Берём середину между префиксом
+	// и концом — это гарантированно изменит decoded plaintext byte.
+	dotIdx := strings.IndexByte(payload, '.')
+	if dotIdx < 0 {
+		t.Fatalf("payload missing dot separator: %q", payload)
+	}
+	mid := dotIdx + 1 + (len(payload)-dotIdx-1)/2
+	tampered := payload[:mid] + flipChar(payload[mid]) + payload[mid+1:]
 	_, err := qr.ParseQRPayload(tampered)
 	if !errors.Is(err, ErrQRTampered) && !errors.Is(err, ErrQRInvalidFormat) {
 		t.Fatalf("expected ErrQRTampered or ErrQRInvalidFormat, got %v", err)
