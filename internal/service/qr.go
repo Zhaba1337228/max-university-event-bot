@@ -36,7 +36,7 @@ type QRPayload struct {
 //	"MAXUEB:"  — legacy формат (event_id и attendance_code в открытом виде),
 //	             принимается на чтение для уже выпущенных QR.
 const (
-	qrPrefixEncV1 = "MAXUEB1."
+	qrPrefixEncV1  = "MAXUEB1."
 	qrPrefixLegacy = "MAXUEB:"
 )
 
@@ -84,7 +84,7 @@ type QR interface {
 type qrService struct {
 	// aead инициализирован, если secret валиден. Если nil — генерация падает
 	// с ошибкой, чтобы случайно не отдать legacy-формат в проде.
-	aead    cipher.AEAD
+	aead cipher.AEAD
 	// allowLegacyEmit — разрешить BuildQRPayload отдавать MAXUEB: вместо
 	// шифрованного формата (только если ключа нет). Для тестов.
 	allowLegacyEmit bool
@@ -131,9 +131,9 @@ func (s *qrService) NewAttendanceCode() string {
 // Короткие имена полей — чтобы итоговая строка влезала в QR с уровнем
 // коррекции Medium на телефонном экране (модулей мало → удобно сканировать).
 type payloadV1 struct {
-	E   int64 `json:"e"`           // event_id
-	C   string `json:"c"`          // attendance_code (32 hex)
-	Exp int64 `json:"exp"`         // unix-секунды
+	E   int64  `json:"e"`   // event_id
+	C   string `json:"c"`   // attendance_code (32 hex)
+	Exp int64  `json:"exp"` // unix-секунды
 }
 
 func (s *qrService) BuildQRPayload(eventID int64, code string) string {
