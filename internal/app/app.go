@@ -126,7 +126,23 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	if cfg.Admin.SessionKey != "" {
 		authSvc = service.NewAuth(pool, usersRepo, cfg.Admin.SessionKey)
 	}
-	qrSvc := service.NewQR()
+	// QR-сервис шифрует payload через AES-256-GCM с ключом, производным от
+	// ADMIN_SESSION_KEY. Если ключ не задан (один из dev-сценариев — запуск
+	// только бота без admin API), включаем legacy plaintext-формат, чтобы
+	// QR в чате хотя бы работал; в проде ADMIN_SESSION_KEY обязателен.
+	var qrSvc service.QR
+	if cfg.Admin.SessionKey != "" {
+		qr, err := service.NewQR(cfg.Admin.SessionKey)
+		if err != nil {
+			a.closeQuietly()
+			return nil, fmt.Errorf("init qr service: %w", err)
+		}
+		qrSvc = qr
+	} else {
+		log.Warn("ADMIN_SESSION_KEY empty — QR payloads will be plaintext (legacy MAXUEB:event:code). " +
+			"Set ADMIN_SESSION_KEY for encrypted QR.")
+		qrSvc = service.NewQRPlaintext()
+	}
 	attendSvc := service.NewAttendance(pool, qrSvc, regsRepo, eventsRepo, usersRepo, roleSvc, logsRepo)
 
 	// Day 16: GigaChat (опционально). Если AuthKey не задан — фасад деградирует

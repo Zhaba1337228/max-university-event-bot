@@ -284,6 +284,12 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, service.ErrQRInvalidPrefix), errors.Is(err, service.ErrQRInvalidFormat):
 		writeJSON(w, http.StatusBadRequest, errResp("bad_qr", "Некорректный QR-код"))
 		return
+	case errors.Is(err, service.ErrQRTampered):
+		writeJSON(w, http.StatusBadRequest, errResp("qr_tampered", "QR подделан или сгенерирован чужим сервером"))
+		return
+	case errors.Is(err, service.ErrQRExpired):
+		writeJSON(w, http.StatusBadRequest, errResp("qr_expired", "Срок действия QR истёк"))
+		return
 	case errors.Is(err, service.ErrNotRegistered):
 		writeJSON(w, http.StatusNotFound, errResp("not_registered", "Регистрация не найдена или неактивна"))
 		return
