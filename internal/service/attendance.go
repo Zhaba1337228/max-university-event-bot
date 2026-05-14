@@ -212,6 +212,10 @@ func (s *attendanceService) ManualMark(ctx context.Context, actorID, eventID, re
 			}
 			action = domain.ActionMarkedNoShowManual
 			reg.Status = domain.RegStatusNoShow
+			// Если запись ранее была attended → у неё проставлен checkin_at;
+			// MarkNoShow в БД сбрасывает его в NULL, надо отразить и в in-memory
+			// копии, иначе UI/CSV покажут «пришёл [дата]» рядом со статусом no_show.
+			reg.CheckinAt = nil
 			reg.CheckinBy = &actorID
 		}
 

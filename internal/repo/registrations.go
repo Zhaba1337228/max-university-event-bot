@@ -180,11 +180,14 @@ WHERE id = $1`
 }
 
 // MarkNoShow проставляет статус 'no_show' + checkin_by = byUserID (как актёр операции).
-// checkin_at НЕ устанавливаем, потому что человек не приходил.
+// checkin_at сбрасываем в NULL: если ранее была ошибочная attended-отметка с
+// timestamp'ом, она должна исчезнуть, чтобы CSV/UI не показывали «пришёл» для
+// no_show строки.
 func (r *registrationsRepo) MarkNoShow(ctx context.Context, q Querier, id int64, byUserID int64) error {
 	const stmt = `
 UPDATE registrations
 SET status = 'no_show',
+    checkin_at = NULL,
     checkin_by = $2,
     updated_at = NOW()
 WHERE id = $1`

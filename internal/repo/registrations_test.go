@@ -195,7 +195,9 @@ func TestRegMarkNoShow(t *testing.T) {
 	mock := newMockRegex(t)
 	regs := repo.NewRegistrations()
 
-	mock.ExpectExec(`UPDATE registrations\s+SET status = 'no_show'`).
+	// SQL должен сбрасывать checkin_at в NULL — иначе при коррекции
+	// attended → no_show останется устаревший timestamp.
+	mock.ExpectExec(`UPDATE registrations\s+SET status = 'no_show',\s+checkin_at = NULL,\s+checkin_by = \$2`).
 		WithArgs(int64(11), int64(22)).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
