@@ -32,12 +32,13 @@ var (
 
 // Event admin operations.
 var (
-	ErrEventInvalidTitle    = errors.New("event title is empty or too long")
-	ErrEventInvalidDates    = errors.New("event dates are invalid (starts_at in past or ends_at <= starts_at)")
-	ErrEventInvalidCapacity = errors.New("event capacity must be > 0")
-	ErrEventInvalidFormat   = errors.New("event format must be offline, online or hybrid")
-	ErrEventInvalidStatus   = errors.New("event status must be open or closed")
-	ErrEventTooManyTags     = errors.New("event tags: max 20 strings, each <= 50 chars")
+	ErrEventInvalidTitle       = errors.New("event title is empty or too long")
+	ErrEventInvalidDescription = errors.New("event description is too long")
+	ErrEventInvalidDates       = errors.New("event dates are invalid (starts_at in past or ends_at <= starts_at)")
+	ErrEventInvalidCapacity    = errors.New("event capacity must be > 0")
+	ErrEventInvalidFormat      = errors.New("event format must be offline, online or hybrid")
+	ErrEventInvalidStatus      = errors.New("event status must be open or closed")
+	ErrEventTooManyTags        = errors.New("event tags: max 20 strings, each <= 50 chars")
 )
 
 // RBAC.

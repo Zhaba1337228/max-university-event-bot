@@ -233,7 +233,7 @@ func buildEventFromInput(in EventInput, now time.Time, isCreate bool) (*domain.E
 	}
 	descr := strings.TrimSpace(in.Description)
 	if len(descr) > 16000 {
-		return nil, ErrEventInvalidTitle
+		return nil, ErrEventInvalidDescription
 	}
 	if in.StartsAt.IsZero() {
 		return nil, ErrEventInvalidDates

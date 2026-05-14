@@ -286,6 +286,8 @@ func writeServiceErr(w http.ResponseWriter, err error, log *slog.Logger, op stri
 	switch {
 	case errors.Is(err, service.ErrEventInvalidTitle):
 		writeJSON(w, http.StatusBadRequest, errResp("bad_title", "Название пустое или длиннее 255 символов"))
+	case errors.Is(err, service.ErrEventInvalidDescription):
+		writeJSON(w, http.StatusBadRequest, errResp("bad_description", "Описание слишком длинное (макс 16000 символов)"))
 	case errors.Is(err, service.ErrEventInvalidDates):
 		writeJSON(w, http.StatusBadRequest, errResp("bad_dates", "Дата начала в прошлом или окончание не позже начала"))
 	case errors.Is(err, service.ErrEventInvalidCapacity):
