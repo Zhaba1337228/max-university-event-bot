@@ -118,7 +118,16 @@ func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64,
 		switch reg.Status {
 		case domain.RegStatusAttended:
 			// Повторный скан — не ошибка, просто отметим.
-			result = &CheckInResult{Registration: reg, Event: ev, Participant: participant, AlreadyDone: true}
+			// Подтягиваем того, кто отметил первоначально, чтобы карточка
+			// на already_done показала строку «Отметил: …».
+			var origScanner *domain.User
+			if reg.CheckinBy != nil {
+				origScanner, err = s.users.GetByID(ctx, tx, *reg.CheckinBy)
+				if err != nil {
+					return fmt.Errorf("get original scanner: %w", err)
+				}
+			}
+			result = &CheckInResult{Registration: reg, Event: ev, Participant: participant, Scanner: origScanner, AlreadyDone: true}
 			return nil
 		case domain.RegStatusRegistered:
 			// ok, продолжаем
