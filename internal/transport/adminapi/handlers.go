@@ -3,6 +3,9 @@ package adminapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -176,6 +179,131 @@ func (s *Server) handleListParticipants(w http.ResponseWriter, r *http.Request) 
 		items = append(items, registrationToDTO(reg, false))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total})
+}
+
+// eventInputDTO — JSON-схема для POST /api/events и PATCH /api/events/{id}.
+// Принимаем только то, что разрешено редактировать админкой. cancelled/finished
+// — внутренние статусы, через эту форму проставить нельзя.
+type eventInputDTO struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	StartsAt    string   `json:"starts_at"`         // RFC3339
+	EndsAt      string   `json:"ends_at,omitempty"` // RFC3339, optional
+	Location    string   `json:"location"`
+	Format      string   `json:"format"` // offline|online|hybrid
+	Capacity    int      `json:"capacity"`
+	Status      string   `json:"status,omitempty"` // open|closed (только для update)
+	Tags        []string `json:"tags"`
+}
+
+// parseEventInput валидирует и переводит DTO в service.EventInput.
+// Все «слабые» ошибки (формат даты, неизвестный format) дают 400 с
+// полем error="bad_input"; бизнес-валидация — внутри service.Event.
+func parseEventInput(body io.ReadCloser, allowStatus bool) (service.EventInput, error) {
+	var dto eventInputDTO
+	if err := json.NewDecoder(body).Decode(&dto); err != nil {
+		return service.EventInput{}, fmt.Errorf("bad_body: %w", err)
+	}
+	in := service.EventInput{
+		Title:       dto.Title,
+		Description: dto.Description,
+		Location:    dto.Location,
+		Format:      domain.EventFormat(dto.Format),
+		Capacity:    dto.Capacity,
+		Tags:        dto.Tags,
+	}
+	startsAt, err := time.Parse(time.RFC3339, dto.StartsAt)
+	if err != nil {
+		return service.EventInput{}, fmt.Errorf("bad_starts_at: %w", err)
+	}
+	in.StartsAt = startsAt
+	if strings.TrimSpace(dto.EndsAt) != "" {
+		endsAt, err := time.Parse(time.RFC3339, dto.EndsAt)
+		if err != nil {
+			return service.EventInput{}, fmt.Errorf("bad_ends_at: %w", err)
+		}
+		in.EndsAt = &endsAt
+	}
+	if allowStatus && dto.Status != "" {
+		in.Status = domain.EventStatus(dto.Status)
+	}
+	return in, nil
+}
+
+// handleEventCreate — POST /api/events.
+//
+// Доступ: только organizer и admin. Создаёт мероприятие с created_by = текущий
+// пользователь. Возвращает 201 и {"event": {...}}.
+func (s *Server) handleEventCreate(w http.ResponseWriter, r *http.Request) {
+	c, _ := claimsFromContext(r.Context())
+	if c.Role != domain.RoleOrganizer && c.Role != domain.RoleAdmin {
+		writeJSON(w, http.StatusForbidden, errResp("role_forbidden", "Создавать мероприятия могут только организатор и админ"))
+		return
+	}
+	in, err := parseEventInput(http.MaxBytesReader(w, r.Body, 16*1024), false)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errResp("bad_input", "Некорректный JSON: "+err.Error()))
+		return
+	}
+	ev, err := s.deps.Events.Create(r.Context(), c.UserID, in)
+	if err != nil {
+		writeServiceErr(w, err, s.log, "event create")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"event": eventToDTO(ev)})
+}
+
+// handleEventUpdate — PATCH /api/events/:id.
+//
+// Доступ: organizer-владелец события или admin. Меняет все поля, кроме
+// служебных (CreatedBy, CreatedAt). Поле status принимается только open|closed.
+func (s *Server) handleEventUpdate(w http.ResponseWriter, r *http.Request) {
+	c, _ := claimsFromContext(r.Context())
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, errResp("bad_id", "Некорректный id"))
+		return
+	}
+	if !ownsEvent(r, s, c.UserID, c.Role, id) {
+		writeJSON(w, http.StatusForbidden, errResp("forbidden", "Нет доступа"))
+		return
+	}
+	in, err := parseEventInput(http.MaxBytesReader(w, r.Body, 16*1024), true)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errResp("bad_input", "Некорректный JSON: "+err.Error()))
+		return
+	}
+	ev, err := s.deps.Events.Update(r.Context(), c.UserID, id, in)
+	if err != nil {
+		writeServiceErr(w, err, s.log, "event update")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"event": eventToDTO(ev)})
+}
+
+// writeServiceErr — единая маппинг доменных ошибок event admin в HTTP.
+func writeServiceErr(w http.ResponseWriter, err error, log *slog.Logger, op string) {
+	switch {
+	case errors.Is(err, service.ErrEventInvalidTitle):
+		writeJSON(w, http.StatusBadRequest, errResp("bad_title", "Название пустое или длиннее 255 символов"))
+	case errors.Is(err, service.ErrEventInvalidDescription):
+		writeJSON(w, http.StatusBadRequest, errResp("bad_description", "Описание слишком длинное (макс 16000 символов)"))
+	case errors.Is(err, service.ErrEventInvalidDates):
+		writeJSON(w, http.StatusBadRequest, errResp("bad_dates", "Дата начала в прошлом или окончание не позже начала"))
+	case errors.Is(err, service.ErrEventInvalidCapacity):
+		writeJSON(w, http.StatusBadRequest, errResp("bad_capacity", "Вместимость должна быть от 1 до 100000"))
+	case errors.Is(err, service.ErrEventInvalidFormat):
+		writeJSON(w, http.StatusBadRequest, errResp("bad_format", "Формат: offline / online / hybrid"))
+	case errors.Is(err, service.ErrEventInvalidStatus):
+		writeJSON(w, http.StatusBadRequest, errResp("bad_status", "Статус: open или closed"))
+	case errors.Is(err, service.ErrEventTooManyTags):
+		writeJSON(w, http.StatusBadRequest, errResp("bad_tags", "До 20 тегов, каждый <= 50 символов"))
+	case errors.Is(err, service.ErrEventNotFound):
+		writeJSON(w, http.StatusNotFound, errResp("not_found", "Событие не найдено"))
+	default:
+		log.Error(op+" failed", "err", err)
+		writeJSON(w, http.StatusInternalServerError, errResp("db", "Внутренняя ошибка"))
+	}
 }
 
 // handleEventClose — POST /api/events/:id/close.
@@ -404,6 +532,9 @@ func eventToDTO(e *domain.Event) map[string]any {
 	}
 	if e.ShortSummary != nil {
 		dto["short_summary"] = *e.ShortSummary
+	}
+	if e.CreatedBy != nil {
+		dto["created_by"] = *e.CreatedBy
 	}
 	return dto
 }

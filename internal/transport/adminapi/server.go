@@ -138,7 +138,9 @@ func (s *Server) routes() http.Handler {
 
 		// Events.
 		r.Get("/events", s.handleListEvents)
+		r.Post("/events", s.handleEventCreate)
 		r.Get("/events/{id}", s.handleGetEvent)
+		r.Patch("/events/{id}", s.handleEventUpdate)
 		r.Get("/events/{id}/participants", s.handleListParticipants)
 		r.Post("/events/{id}/close", s.handleEventClose)
 		r.Post("/events/{id}/open", s.handleEventOpen)

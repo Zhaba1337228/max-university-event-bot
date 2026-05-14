@@ -72,7 +72,7 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	fsmMgr := fsm.NewManager(statesRepo, pool)
 
 	// 4. Services
-	eventSvc := service.NewEvent(pool, eventsRepo, regsRepo)
+	eventSvc := service.NewEvent(pool, eventsRepo, regsRepo, logsRepo)
 	userSvc := service.NewUser(pool, usersRepo, logsRepo)
 	regSvc := service.NewRegistration(pool, eventsRepo, regsRepo, usersRepo, logsRepo,
 		cfg.Business.WaitlistEnabled)
