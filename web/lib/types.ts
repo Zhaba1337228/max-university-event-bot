@@ -106,3 +106,91 @@ export type CheckinResp = {
 export type BroadcastResp = {
   sent: number;
 };
+
+// --- P1: Audit log / Manual mark / Users ---
+
+export type AuditLogEntry = {
+  id: number;
+  action: string;
+  created_at: string;
+  actor_user_id?: number;
+  target_user_id?: number;
+  registration_id?: number;
+  event_id?: number;
+  payload?: Record<string, unknown>;
+};
+
+export type AuditLogResp = {
+  items: AuditLogEntry[];
+  total: number;
+};
+
+// actionLabel — короткая русская подпись типа действия для audit log.
+export function actionLabel(a: string): string {
+  switch (a) {
+    case "registration_created":
+      return "Регистрация создана";
+    case "registration_cancelled_by_user":
+      return "Отменено участником";
+    case "registration_cancelled_by_organizer":
+      return "Отменено организатором";
+    case "waitlist_added":
+      return "Добавлен в waitlist";
+    case "waitlist_promoted":
+      return "Перенесён из waitlist";
+    case "notification_sent":
+      return "Уведомление отправлено";
+    case "event_closed":
+      return "Событие закрыто";
+    case "event_opened":
+      return "Событие открыто";
+    case "event_created":
+      return "Событие создано";
+    case "event_updated":
+      return "Событие изменено";
+    case "ai_recommendation_shown":
+      return "AI-подбор показан";
+    case "ai_notification_rewritten":
+      return "AI улучшил уведомление";
+    case "ai_summary_generated":
+      return "AI: сводка сгенерирована";
+    case "admin_login":
+      return "Вход в админку";
+    case "admin_logout":
+      return "Выход из админки";
+    case "marked_attended_manually":
+      return "Отмечен вручную (пришёл)";
+    case "marked_no_show_manually":
+      return "Отмечен вручную (не пришёл)";
+    case "user_role_changed":
+      return "Роль пользователя изменена";
+    case "participants_exported_csv":
+      return "Экспортирован CSV";
+    case "pii_unmasked":
+      return "Раскрыты ПДн";
+    case "checkin_scanned":
+      return "QR-скан check-in";
+    case "consent_granted":
+      return "Согласие выдано";
+    case "forget_me":
+      return "Удалён по «забыть»";
+    default:
+      return a;
+  }
+}
+
+export type UserListItem = {
+  id: number;
+  max_user_id: number;
+  role: Role;
+  full_name?: string;
+  phone_masked?: string;
+  email_masked?: string;
+  consent_at?: string;
+  created_at: string;
+};
+
+export type UserListResp = {
+  items: UserListItem[];
+  total: number;
+};

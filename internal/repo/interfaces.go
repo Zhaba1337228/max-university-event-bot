@@ -32,6 +32,11 @@ type UserRepo interface {
 	// ForgetMe удаляет пользователя со всеми каскадными зависимостями
 	// (registrations, action_logs, user_states, notifications).
 	ForgetMe(ctx context.Context, q Querier, id int64) error
+
+	// List возвращает страницу пользователей с фильтром по роли и подстрокой.
+	// roleFilter == "" — без фильтра по роли. query сравнивается с full_name/phone/email
+	// case-insensitive (ILIKE). Возвращает users + total для пагинации.
+	List(ctx context.Context, q Querier, roleFilter domain.Role, query string, limit, offset int) ([]*domain.User, int, error)
 }
 
 // EventRepo — операции над мероприятиями.
@@ -62,7 +67,9 @@ type RegistrationRepo interface {
 	SetAttendanceCode(ctx context.Context, q Querier, id int64, code string) error
 	SetQRMessageID(ctx context.Context, q Querier, id int64, messageID int64) error
 	MarkAttended(ctx context.Context, q Querier, id int64, byUserID int64) error
+	MarkNoShow(ctx context.Context, q Querier, id int64, byUserID int64) error
 	ListByEvent(ctx context.Context, q Querier, eventID int64, status domain.RegistrationStatus, limit, offset int) ([]*domain.Registration, error)
+	ListByEventAllStatuses(ctx context.Context, q Querier, eventID int64, limit, offset int) ([]*domain.Registration, error)
 	ListByUser(ctx context.Context, q Querier, userID int64, activeOnly bool) ([]*domain.Registration, error)
 	CountByEvent(ctx context.Context, q Querier, eventID int64, status domain.RegistrationStatus) (int, error)
 	NextWaitlist(ctx context.Context, q Querier, eventID int64) (*domain.Registration, error)

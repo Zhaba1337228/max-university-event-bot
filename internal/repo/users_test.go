@@ -140,3 +140,67 @@ func TestUsersSetRole(t *testing.T) {
 		t.Fatalf("SetRole: %v", err)
 	}
 }
+
+func TestUsersListEmptyFilter(t *testing.T) {
+	t.Parallel()
+	mock := newMockRegex(t)
+	users := repo.NewUsers()
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users`).
+		WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(int(2)))
+
+	now := time.Now()
+	rows := pgxmock.NewRows([]string{
+		"id", "max_user_id", "full_name", "phone", "email", "role", "locale",
+		"consent_at", "consent_policy_ver", "created_at", "updated_at",
+	}).
+		AddRow(int64(1), int64(100), nil, nil, nil, "admin", "ru",
+			nil, nil, now, now).
+		AddRow(int64(2), int64(200), nil, nil, nil, "applicant", "ru",
+			nil, nil, now, now)
+
+	mock.ExpectQuery(`FROM users ORDER BY created_at DESC LIMIT \$1 OFFSET \$2`).
+		WithArgs(50, 0).
+		WillReturnRows(rows)
+
+	got, total, err := users.List(context.Background(), mock, "", "", 50, 0)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if total != 2 || len(got) != 2 {
+		t.Fatalf("want total=2 / 2 rows, got total=%d / %d rows", total, len(got))
+	}
+}
+
+func TestUsersListWithRoleFilter(t *testing.T) {
+	t.Parallel()
+	mock := newMockRegex(t)
+	users := repo.NewUsers()
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users\s+WHERE \(\$1 = '' OR role = \$1\)`).
+		WithArgs("organizer", "", "%%").
+		WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(int(1)))
+
+	now := time.Now()
+	rows := pgxmock.NewRows([]string{
+		"id", "max_user_id", "full_name", "phone", "email", "role", "locale",
+		"consent_at", "consent_policy_ver", "created_at", "updated_at",
+	}).
+		AddRow(int64(5), int64(500), nil, nil, nil, "organizer", "ru",
+			nil, nil, now, now)
+
+	mock.ExpectQuery(`FROM users\s+WHERE \(\$1 = '' OR role = \$1\).*ORDER BY created_at DESC`).
+		WithArgs("organizer", "", "%%", 50, 0).
+		WillReturnRows(rows)
+
+	got, total, err := users.List(context.Background(), mock, domain.RoleOrganizer, "", 50, 0)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if total != 1 || len(got) != 1 {
+		t.Fatalf("want total=1 / 1 row, got total=%d / %d rows", total, len(got))
+	}
+	if got[0].Role != domain.RoleOrganizer {
+		t.Errorf("want role=organizer, got %s", got[0].Role)
+	}
+}

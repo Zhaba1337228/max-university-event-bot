@@ -40,18 +40,19 @@ type Server struct {
 
 // Deps — все сервисы и репозитории, нужные для handlers.
 type Deps struct {
-	Auth         service.Auth
-	Events       service.Event
-	Registration service.Registration
-	Users        service.User
-	Role         service.Role
-	Notification service.Notification
-	Attendance   service.Attendance
-	ActionLogs   service.ActionLog
-	RegsRepo     repo.RegistrationRepo
-	UsersRepo    repo.UserRepo // нужен для checkin (local id → max id lookup)
-	EventsRepo   repo.EventRepo
-	DB           repo.Querier
+	Auth           service.Auth
+	Events         service.Event
+	Registration   service.Registration
+	Users          service.User
+	Role           service.Role
+	Notification   service.Notification
+	Attendance     service.Attendance
+	ActionLogs     service.ActionLog
+	RegsRepo       repo.RegistrationRepo
+	UsersRepo      repo.UserRepo // нужен для checkin (local id → max id lookup)
+	EventsRepo     repo.EventRepo
+	ActionLogsRepo repo.ActionLogRepo // прямой Append (CSV export, manual mark вне сервиса)
+	DB             repo.Querier
 }
 
 // New создаёт сервер. Не запускает — это делает Run.
@@ -140,15 +141,22 @@ func (s *Server) routes() http.Handler {
 		r.Get("/events", s.handleListEvents)
 		r.Get("/events/{id}", s.handleGetEvent)
 		r.Get("/events/{id}/participants", s.handleListParticipants)
+		r.Get("/events/{id}/participants.csv", s.handleExportParticipantsCSV)
+		r.Get("/events/{id}/actions", s.handleEventAuditLog)
 		r.Post("/events/{id}/close", s.handleEventClose)
 		r.Post("/events/{id}/open", s.handleEventOpen)
 		r.Post("/events/{id}/broadcast", s.handleBroadcast)
+		r.Post("/events/{id}/registrations/{regID}/mark", s.handleManualMark)
 
 		// Check-in (камера телефона организатора).
 		r.Post("/checkin", s.handleCheckin)
 
 		// Dashboard.
 		r.Get("/dashboard", s.handleDashboard)
+
+		// Users (admin-only).
+		r.With(requireAdmin()).Get("/users", s.handleListUsers)
+		r.With(requireAdmin()).Patch("/users/{id}/role", s.handleSetUserRole)
 	})
 
 	return r

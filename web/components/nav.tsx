@@ -24,6 +24,9 @@ function tabsForRole(role: Role): Tab[] {
   if (canCheckin(role)) {
     out.push({ href: "/checkin", label: "Check-in" });
   }
+  if (role === "admin") {
+    out.push({ href: "/users", label: "Пользователи" });
+  }
   return out;
 }
 

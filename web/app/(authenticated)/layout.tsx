@@ -64,6 +64,12 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
       router.replace("/forbidden?reason=checkin_organizer");
       return;
     }
+
+    // /users — только admin.
+    if (pathname.startsWith("/users") && role !== "admin") {
+      router.replace("/forbidden?reason=users_admin");
+      return;
+    }
   }, [me, pathname, router]);
 
   if (loading) {
@@ -82,6 +88,9 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
     return <div className="container py-16 text-subtle">Перенаправляем…</div>;
   }
   if (role === "organizer" && pathname.startsWith("/checkin")) {
+    return <div className="container py-16 text-subtle">Перенаправляем…</div>;
+  }
+  if (pathname.startsWith("/users") && role !== "admin") {
     return <div className="container py-16 text-subtle">Перенаправляем…</div>;
   }
 

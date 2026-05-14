@@ -179,6 +179,23 @@ WHERE id = $1`
 	return nil
 }
 
+// MarkNoShow проставляет статус 'no_show' + checkin_by = byUserID (как актёр операции).
+// checkin_at НЕ устанавливаем, потому что человек не приходил.
+func (r *registrationsRepo) MarkNoShow(ctx context.Context, q Querier, id int64, byUserID int64) error {
+	const stmt = `
+UPDATE registrations
+SET status = 'no_show',
+    checkin_by = $2,
+    updated_at = NOW()
+WHERE id = $1`
+
+	_, err := q.Exec(ctx, stmt, id, byUserID)
+	if err != nil {
+		return fmt.Errorf("mark no_show: %w", err)
+	}
+	return nil
+}
+
 func (r *registrationsRepo) ListByEvent(ctx context.Context, q Querier, eventID int64, status domain.RegistrationStatus, limit, offset int) ([]*domain.Registration, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -212,6 +229,43 @@ LIMIT $3 OFFSET $4`
 	}
 	if err != nil {
 		return nil, fmt.Errorf("list by event: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]*domain.Registration, 0, limit)
+	for rows.Next() {
+		reg := &domain.Registration{}
+		if err := scanRegistration(rows, reg); err != nil {
+			return nil, fmt.Errorf("scan reg: %w", err)
+		}
+		out = append(out, reg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iter regs: %w", err)
+	}
+	return out, nil
+}
+
+// ListByEventAllStatuses возвращает ВСЕ записи на событие (включая cancelled/attended/no_show).
+// Используется для CSV-экспорта из веб-админки.
+func (r *registrationsRepo) ListByEventAllStatuses(ctx context.Context, q Querier, eventID int64, limit, offset int) ([]*domain.Registration, error) {
+	if limit <= 0 || limit > 10000 {
+		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	const stmt = `
+SELECT ` + regColumns + `
+FROM registrations
+WHERE event_id = $1
+ORDER BY created_at ASC
+LIMIT $2 OFFSET $3`
+
+	rows, err := q.Query(ctx, stmt, eventID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list all by event: %w", err)
 	}
 	defer rows.Close()
 
