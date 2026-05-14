@@ -64,8 +64,13 @@ func TestEncrypted_TamperedDetected(t *testing.T) {
 	code := qr.NewAttendanceCode()
 	payload := qr.BuildQRPayload(1, code)
 
-	// Меняем последний символ base64 — GCM auth-tag должен расстроиться.
-	tampered := payload[:len(payload)-1] + flipChar(payload[len(payload)-1])
+	// Меняем символ ВНУТРИ base64-тела (не последний — там могут оказаться
+	// «лишние» биты выравнивания, флип которых не повлияет на декодированный
+	// байт и GCM не сработает). Берём середину после префикса MAXUEB1.
+	prefixLen := len("MAXUEB1.")
+	body := payload[prefixLen:]
+	mid := len(body) / 2
+	tampered := payload[:prefixLen] + body[:mid] + flipChar(body[mid]) + body[mid+1:]
 	_, err := qr.ParseQRPayload(tampered)
 	if !errors.Is(err, ErrQRTampered) && !errors.Is(err, ErrQRInvalidFormat) {
 		t.Fatalf("expected ErrQRTampered or ErrQRInvalidFormat, got %v", err)

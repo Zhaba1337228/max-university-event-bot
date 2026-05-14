@@ -29,10 +29,19 @@ type Attendance interface {
 }
 
 // CheckInResult — что произошло.
+//
+// Поля Registration/Event/Participant заполняются ВСЕГДА, когда регистрация
+// нашлась — в т.ч. для ошибок ErrRegistrationCancelled, ErrRegistrationOnWaitlist,
+// ErrRegistrationNoShow, ErrCheckinWindowClosed, ErrAlreadyCheckedIn. Это
+// нужно, чтобы admin web мог показать волонтёру **подробную карточку** даже
+// в случае «нельзя отметить» — с информацией о мероприятии и участнике.
+// Scanner заполняется только при успешном check-in (и AlreadyDone).
 type CheckInResult struct {
 	Registration *domain.Registration
 	Event        *domain.Event
-	AlreadyDone  bool // если повторный скан того же QR — true, status уже attended
+	Participant  *domain.User // владелец регистрации (для отображения телефона/email)
+	Scanner      *domain.User // кто сканировал (заполнен на success/AlreadyDone)
+	AlreadyDone  bool         // если повторный скан того же QR — true, status уже attended
 }
 
 type attendanceService struct {
@@ -91,21 +100,8 @@ func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64,
 			return fmt.Errorf("%w: event mismatch", ErrNotRegistered)
 		}
 
-		// Состояние записи.
-		switch reg.Status {
-		case domain.RegStatusAttended:
-			// Повторный скан — не ошибка, просто отметим.
-			ev, _ := s.events.Get(ctx, tx, reg.EventID)
-			result = &CheckInResult{Registration: reg, Event: ev, AlreadyDone: true}
-			return nil
-		case domain.RegStatusRegistered:
-			// ok, продолжаем
-		default:
-			// cancelled / no_show / waitlist — нельзя.
-			return fmt.Errorf("%w: status=%s", ErrNotRegistered, reg.Status)
-		}
-
-		// Окно check-in.
+		// Регистрация нашлась — подгружаем event + participant для
+		// подробной карточки (нужна и в success-, и в error-ответах).
 		ev, err := s.events.Get(ctx, tx, reg.EventID)
 		if err != nil {
 			return fmt.Errorf("get event: %w", err)
@@ -113,6 +109,42 @@ func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64,
 		if ev == nil {
 			return ErrEventNotFound
 		}
+		participant, err := s.users.GetByID(ctx, tx, reg.UserID)
+		if err != nil {
+			return fmt.Errorf("get participant: %w", err)
+		}
+
+		// Состояние записи.
+		switch reg.Status {
+		case domain.RegStatusAttended:
+			// Повторный скан — не ошибка, просто отметим.
+			// Подтягиваем того, кто отметил первоначально, чтобы карточка
+			// на already_done показала строку «Отметил: …».
+			var origScanner *domain.User
+			if reg.CheckinBy != nil {
+				origScanner, err = s.users.GetByID(ctx, tx, *reg.CheckinBy)
+				if err != nil {
+					return fmt.Errorf("get original scanner: %w", err)
+				}
+			}
+			result = &CheckInResult{Registration: reg, Event: ev, Participant: participant, Scanner: origScanner, AlreadyDone: true}
+			return nil
+		case domain.RegStatusRegistered:
+			// ok, продолжаем
+		case domain.RegStatusCancelledByUser, domain.RegStatusCancelledByOrganizer:
+			result = &CheckInResult{Registration: reg, Event: ev, Participant: participant}
+			return ErrRegistrationCancelled
+		case domain.RegStatusWaitlist:
+			result = &CheckInResult{Registration: reg, Event: ev, Participant: participant}
+			return ErrRegistrationOnWaitlist
+		case domain.RegStatusNoShow:
+			result = &CheckInResult{Registration: reg, Event: ev, Participant: participant}
+			return ErrRegistrationNoShow
+		default:
+			return fmt.Errorf("%w: status=%s", ErrNotRegistered, reg.Status)
+		}
+
+		// Окно check-in. Если закрыто — отдаём подробную карточку для UI.
 		now := time.Now()
 		windowStart := ev.StartsAt.Add(-checkinPreWindow)
 		windowEnd := ev.StartsAt.Add(checkinPostWindow)
@@ -120,6 +152,7 @@ func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64,
 			windowEnd = ev.EndsAt.Add(checkinPostWindow)
 		}
 		if now.Before(windowStart) || now.After(windowEnd) {
+			result = &CheckInResult{Registration: reg, Event: ev, Participant: participant}
 			return ErrCheckinWindowClosed
 		}
 
@@ -152,10 +185,15 @@ func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64,
 		nowVal := time.Now()
 		reg.CheckinAt = &nowVal
 		reg.CheckinBy = &scanner.ID
-		result = &CheckInResult{Registration: reg, Event: ev, AlreadyDone: false}
+		result = &CheckInResult{Registration: reg, Event: ev, Participant: participant, Scanner: scanner, AlreadyDone: false}
 		return nil
 	})
 	if txErr != nil {
+		// Если результат уже заполнен (статус-ветки/окно) — отдаём его + ошибку.
+		// Handler решит, что показать.
+		if result != nil {
+			return result, txErr
+		}
 		return nil, txErr
 	}
 	return result, nil

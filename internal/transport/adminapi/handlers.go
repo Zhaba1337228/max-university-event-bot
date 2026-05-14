@@ -291,7 +291,7 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errResp("qr_expired", "Срок действия QR истёк"))
 		return
 	case errors.Is(err, service.ErrNotRegistered):
-		writeJSON(w, http.StatusNotFound, errResp("not_registered", "Регистрация не найдена или неактивна"))
+		writeJSON(w, http.StatusNotFound, errResp("not_registered", "Регистрация не найдена"))
 		return
 	case errors.Is(err, service.ErrEventNotFound):
 		writeJSON(w, http.StatusNotFound, errResp("event_not_found", "Событие не найдено"))
@@ -299,19 +299,61 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, service.ErrNotStaff), errors.Is(err, service.ErrNotOrganizer), errors.Is(err, service.ErrNotEventOwner):
 		writeJSON(w, http.StatusForbidden, errResp("forbidden", "Нет прав на check-in"))
 		return
+	case errors.Is(err, service.ErrRegistrationCancelled):
+		writeJSON(w, http.StatusConflict, checkinErrorDetail(res, "registration_cancelled",
+			"Эта регистрация была отменена. Отметить присутствие нельзя."))
+		return
+	case errors.Is(err, service.ErrRegistrationOnWaitlist):
+		writeJSON(w, http.StatusConflict, checkinErrorDetail(res, "registration_waitlist",
+			"Участник в листе ожидания, регистрация не подтверждена."))
+		return
+	case errors.Is(err, service.ErrRegistrationNoShow):
+		writeJSON(w, http.StatusConflict, checkinErrorDetail(res, "registration_no_show",
+			"Регистрация помечена как не явившийся (no_show)."))
+		return
 	case errors.Is(err, service.ErrCheckinWindowClosed):
-		writeJSON(w, http.StatusConflict, errResp("window_closed", "Окно check-in закрыто"))
+		writeJSON(w, http.StatusConflict, checkinErrorDetail(res, "window_closed",
+			"Окно check-in закрыто (разрешено за 2ч до начала и в течение 4ч после окончания)."))
 		return
 	case err != nil:
 		s.log.Error("checkin failed", "err", err)
 		writeJSON(w, http.StatusInternalServerError, errResp("internal", "Внутренняя ошибка"))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, http.StatusOK, checkinSuccessResp(res))
+}
+
+// checkinSuccessResp — подробная карточка после успешного check-in (или повторного скана).
+func checkinSuccessResp(res *service.CheckInResult) map[string]any {
+	return map[string]any{
 		"already_done": res.AlreadyDone,
 		"registration": registrationToDTO(res.Registration, true),
 		"event":        eventToDTO(res.Event),
-	})
+		"participant":  userToDTO(res.Participant),
+		"scanner":      userToDTO(res.Scanner),
+	}
+}
+
+// checkinErrorDetail — «отказ» с подробной карточкой: волонтёр видит почему нельзя,
+// на какое мероприятие была запись и кто участник. res может быть nil — тогда приходит только error/message.
+func checkinErrorDetail(res *service.CheckInResult, code, message string) map[string]any {
+	out := map[string]any{
+		"error":   code,
+		"message": message,
+	}
+	if res == nil {
+		return out
+	}
+	if res.Registration != nil {
+		out["registration"] = registrationToDTO(res.Registration, true)
+	}
+	if res.Event != nil {
+		out["event"] = eventToDTO(res.Event)
+	}
+	if res.Participant != nil {
+		out["participant"] = userToDTO(res.Participant)
+	}
+	return out
 }
 
 // --- DASHBOARD ---
@@ -384,6 +426,29 @@ func eventsToDTO(evs []*domain.Event) []map[string]any {
 	return out
 }
 
+// userToDTO — безопасный портрет юзера для UI check-in: волонтёр должен сверить личность,
+// поэтому не маскируем телефон/email/full_name. Не отдаём лишнее (consent_*, locale).
+func userToDTO(u *domain.User) map[string]any {
+	if u == nil {
+		return nil
+	}
+	dto := map[string]any{
+		"id":          u.ID,
+		"max_user_id": u.MaxUserID,
+		"role":        string(u.Role),
+	}
+	if u.FullName != nil {
+		dto["full_name"] = *u.FullName
+	}
+	if u.Phone != nil {
+		dto["phone"] = *u.Phone
+	}
+	if u.Email != nil {
+		dto["email"] = *u.Email
+	}
+	return dto
+}
+
 func eventToDTO(e *domain.Event) map[string]any {
 	if e == nil {
 		return nil
@@ -435,12 +500,22 @@ func registrationToDTO(r *domain.Registration, unmask bool) map[string]any {
 		"full_name_masked": maskFullName(r.FullNameSnapshot),
 		"contact_masked":   maskContactDTO(r.ContactSnapshot),
 		"source":           r.Source,
+		"created_at":       r.CreatedAt.UTC().Format(time.RFC3339),
 	}
 	if r.RegisteredAt != nil {
 		dto["registered_at"] = r.RegisteredAt.UTC().Format(time.RFC3339)
 	}
+	if r.CancelledAt != nil {
+		dto["cancelled_at"] = r.CancelledAt.UTC().Format(time.RFC3339)
+	}
 	if r.CheckinAt != nil {
 		dto["checkin_at"] = r.CheckinAt.UTC().Format(time.RFC3339)
+	}
+	if r.CheckinBy != nil {
+		dto["checkin_by"] = *r.CheckinBy
+	}
+	if r.WaitlistPosition != nil {
+		dto["waitlist_position"] = *r.WaitlistPosition
 	}
 	if r.InterestProgram != nil {
 		dto["interest_program"] = *r.InterestProgram
