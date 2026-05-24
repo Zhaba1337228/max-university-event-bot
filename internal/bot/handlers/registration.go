@@ -149,6 +149,17 @@ func (h *RegistrationHandler) onStart(ctx context.Context, chatID, userMaxID, ev
 		h.sendError(ctx, chatID)
 		return
 	}
+	if existing, err := h.reg.GetActive(ctx, user.ID, eventID); err != nil {
+		h.log.Error("check active registration failed", "err", err)
+		h.sendError(ctx, chatID)
+		return
+	} else if existing != nil {
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.AlreadyRegistered(), keyboards.AfterRegistration()); err != nil {
+			h.log.Error("send already registered failed", "err", err)
+		}
+		return
+	}
 
 	// Сохраняем текущее событие в FSM.
 	snap, _ := h.fsm.Load(ctx, userMaxID)
@@ -222,7 +233,10 @@ func (h *RegistrationHandler) onConfirm(ctx context.Context, chatID, userMaxID i
 		_ = h.fsm.Reset(ctx, userMaxID)
 		return
 	case errors.Is(err, service.ErrAlreadyRegistered):
-		h.sendText(ctx, chatID, messages.AlreadyRegistered())
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.AlreadyRegistered(), keyboards.AfterRegistration()); err != nil {
+			h.log.Error("send already registered failed", "err", err)
+		}
 		_ = h.fsm.Reset(ctx, userMaxID)
 		return
 	case errors.Is(err, service.ErrEventClosed):

@@ -168,6 +168,18 @@ func (s *registrationService) Register(ctx context.Context, in RegisterInput) (*
 			return ErrEventClosed
 		}
 
+		// 4.1.1: повторно проверяем дубль уже внутри сериализованной секции.
+		// Это закрывает быстрые/параллельные повторные подтверждения с одного аккаунта:
+		// первый запрос создаёт запись, второй после ожидания event-lock увидит её здесь
+		// и вернёт ErrAlreadyRegistered вместо "успешного" upsert той же строки.
+		existing, err := s.regs.GetActiveByUserEvent(ctx, tx, in.UserID, in.EventID)
+		if err != nil {
+			return fmt.Errorf("check duplicate in tx: %w", err)
+		}
+		if existing != nil {
+			return ErrAlreadyRegistered
+		}
+
 		// 4.2: считаем зарегистрированных + посетивших.
 		regCount, err := s.regs.CountByEvent(ctx, tx, ev.ID, domain.RegStatusRegistered)
 		if err != nil {
