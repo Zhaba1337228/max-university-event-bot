@@ -150,14 +150,15 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	var aiSvc service.AI
 	if cfg.GigaChat.AuthKey != "" {
 		giga := gigachat.New(gigachat.Config{
-			AuthKey:     cfg.GigaChat.AuthKey,
-			Scope:       cfg.GigaChat.Scope,
-			Model:       cfg.GigaChat.Model,
-			OAuthURL:    cfg.GigaChat.OAuthURL,
-			APIURL:      cfg.GigaChat.APIURL,
-			Timeout:     cfg.GigaChat.Timeout,
-			InsecureTLS: cfg.GigaChat.InsecureTLS,
-			MaxTokens:   cfg.AI.MaxTokens,
+			AuthKey:      cfg.GigaChat.AuthKey,
+			Scope:        cfg.GigaChat.Scope,
+			Model:        cfg.GigaChat.Model,
+			OAuthURL:     cfg.GigaChat.OAuthURL,
+			APIURL:       cfg.GigaChat.APIURL,
+			Timeout:      cfg.GigaChat.Timeout,
+			CABundleFile: cfg.GigaChat.CABundleFile,
+			InsecureTLS:  cfg.GigaChat.InsecureTLS,
+			MaxTokens:    cfg.AI.MaxTokens,
 		})
 		aiSvc = service.NewAI(giga, service.AIConfig{
 			RecommenderEnabled: cfg.AI.RecommenderEnabled,

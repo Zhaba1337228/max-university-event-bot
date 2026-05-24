@@ -75,13 +75,14 @@ type LogConfig struct {
 // Все поля опциональные: при пустом AuthKey AI-сервисы должны деградировать
 // в fallback (см. план §17.4).
 type GigaChatConfig struct {
-	AuthKey     string        `env:"AUTH_KEY"`
-	Scope       string        `env:"SCOPE"        envDefault:"GIGACHAT_API_PERS"`
-	Model       string        `env:"MODEL"        envDefault:"GigaChat"`
-	OAuthURL    string        `env:"OAUTH_URL"    envDefault:"https://ngw.devices.sberbank.ru:9443/api/v2/oauth"`
-	APIURL      string        `env:"API_URL"      envDefault:"https://gigachat.devices.sberbank.ru/api/v1"`
-	Timeout     time.Duration `env:"TIMEOUT"      envDefault:"20s"`
-	InsecureTLS bool          `env:"INSECURE_TLS"`
+	AuthKey      string        `env:"AUTH_KEY"`
+	Scope        string        `env:"SCOPE"        envDefault:"GIGACHAT_API_PERS"`
+	Model        string        `env:"MODEL"        envDefault:"GigaChat"`
+	OAuthURL     string        `env:"OAUTH_URL"    envDefault:"https://ngw.devices.sberbank.ru:9443/api/v2/oauth"`
+	APIURL       string        `env:"API_URL"      envDefault:"https://gigachat.devices.sberbank.ru/api/v1"`
+	Timeout      time.Duration `env:"TIMEOUT"      envDefault:"20s"`
+	CABundleFile string        `env:"CA_BUNDLE_FILE"`
+	InsecureTLS  bool          `env:"INSECURE_TLS"`
 }
 
 // BusinessConfig — продуктовые настройки.
@@ -195,11 +196,13 @@ func (c *Config) String() string {
 			"HTTP:%s, Admin:{API:%s, Web:%s, SessionKey:%s}, "+
 			"DB:{URL:%s, MaxConns:%d}, Log:%s/%s, "+
 			"GigaChat:{AuthKey:%s, Scope:%s, Model:%s, InsecureTLS:%v}, "+
+			"GigaChatCA:%s, "+
 			"Business:{Reminders:%s, WL:%v}, AI:{Rec:%v,Rew:%v,Sum:%v}}",
 		secret.Mask(c.Max.Token), c.Max.Mode, secret.Mask(c.Max.WebhookSecret),
 		c.HTTP.Addr, c.Admin.APIAddr, c.Admin.WebBaseURL, secret.Mask(c.Admin.SessionKey),
 		secret.Mask(c.DB.URL), c.DB.MaxConns, c.Log.Level, c.Log.Format,
 		secret.Mask(c.GigaChat.AuthKey), c.GigaChat.Scope, c.GigaChat.Model, c.GigaChat.InsecureTLS,
+		c.GigaChat.CABundleFile,
 		c.Business.ReminderHoursCSV, c.Business.WaitlistEnabled,
 		c.AI.RecommenderEnabled, c.AI.RewriterEnabled, c.AI.SummaryEnabled,
 	)

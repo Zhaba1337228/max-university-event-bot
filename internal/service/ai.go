@@ -65,30 +65,17 @@ func (a *aiService) RecommendEvents(ctx context.Context, interest string, events
 		return nil, ErrAIUnavailable
 	}
 
-	// Минимизируем JSON для AI: только id, title, tags, format, дата.
-	minimal := make([]map[string]any, 0, len(events))
-	for _, e := range events {
-		minimal = append(minimal, map[string]any{
-			"event_id":  e.ID,
-			"title":     e.Title,
-			"tags":      e.Tags,
-			"starts_at": e.StartsAt.Format(time.RFC3339),
-			"format":    string(e.Format),
-		})
-	}
-	listJSON, _ := json.Marshal(map[string]any{"events": minimal})
-
-	userMsg := fmt.Sprintf(gigachat.UserRecommenderTemplate, interest, string(listJSON))
+	userMsg := fmt.Sprintf(gigachat.UserRecommenderTemplate, interest, formatEventsCatalogForAI(events))
 
 	resp, err := a.callWithTimeout(ctx, []gigachat.ChatMessage{
 		{Role: "system", Content: gigachat.SystemRecommender},
 		{Role: "user", Content: userMsg},
-	}, 0.2)
+	}, 0.0)
 	if err != nil {
 		return nil, ErrAIUnavailable
 	}
 
-	raw := stripCodeFences(resp.Choices[0].Message.Content)
+	raw := extractJSONObject(resp.Choices[0].Message.Content)
 	var parsed struct {
 		Recommendations []struct {
 			EventID int64  `json:"event_id"`
@@ -147,7 +134,7 @@ func (a *aiService) RewriteNotification(ctx context.Context, draft string, ev *d
 		return "", ErrAIUnavailable
 	}
 
-	raw := stripCodeFences(resp.Choices[0].Message.Content)
+	raw := extractJSONObject(resp.Choices[0].Message.Content)
 	var parsed struct {
 		Text string `json:"text"`
 	}
@@ -186,7 +173,7 @@ func (a *aiService) OrganizerSummary(ctx context.Context, ev *domain.Event, stat
 		return "", ErrAIUnavailable
 	}
 
-	raw := stripCodeFences(resp.Choices[0].Message.Content)
+	raw := extractJSONObject(resp.Choices[0].Message.Content)
 	var parsed struct {
 		Summary string `json:"summary"`
 	}
@@ -227,6 +214,51 @@ func stripCodeFences(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// extractJSONObject пытается вытащить первый корректный JSON-объект из ответа.
+// GigaChat иногда добавляет пояснение перед JSON или оборачивает его в ```json.
+func extractJSONObject(s string) string {
+	s = stripCodeFences(s)
+	start := strings.IndexByte(s, '{')
+	if start < 0 {
+		return strings.TrimSpace(s)
+	}
+
+	depth := 0
+	inString := false
+	escaped := false
+	for i := start; i < len(s); i++ {
+		ch := s[i]
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if ch == '\\' {
+				escaped = true
+				continue
+			}
+			if ch == '"' {
+				inString = false
+			}
+			continue
+		}
+
+		switch ch {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return strings.TrimSpace(s[start : i+1])
+			}
+		}
+	}
+
+	return strings.TrimSpace(s[start:])
+}
+
 // topInterestsString собирает map[interest]count в строку для prompt'а.
 func topInterestsString(m map[string]int) string {
 	if len(m) == 0 {
@@ -251,4 +283,33 @@ func topInterestsString(m map[string]int) string {
 		parts = append(parts, fmt.Sprintf("%s (%d)", p.k, p.v))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func formatEventsCatalogForAI(events []*domain.Event) string {
+	var sb strings.Builder
+	for i, e := range events {
+		if i > 0 {
+			sb.WriteString("\n\n")
+		}
+		summary := strings.TrimSpace(e.Description)
+		if e.ShortSummary != nil && strings.TrimSpace(*e.ShortSummary) != "" {
+			summary = strings.TrimSpace(*e.ShortSummary)
+		}
+		if summary == "" {
+			summary = "—"
+		}
+		tags := "—"
+		if len(e.Tags) > 0 {
+			tags = strings.Join(e.Tags, ", ")
+		}
+
+		sb.WriteString(fmt.Sprintf("event_id: %d\n", e.ID))
+		sb.WriteString("title: " + e.Title + "\n")
+		sb.WriteString("summary: " + summary + "\n")
+		sb.WriteString("location: " + e.Location + "\n")
+		sb.WriteString("tags: " + tags + "\n")
+		sb.WriteString("starts_at: " + e.StartsAt.Format(time.RFC3339) + "\n")
+		sb.WriteString("format: " + string(e.Format))
+	}
+	return sb.String()
 }

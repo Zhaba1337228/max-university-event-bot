@@ -12,12 +12,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -27,14 +29,15 @@ import (
 
 // Config — параметры клиента.
 type Config struct {
-	AuthKey     string // base64(client_id:client_secret) из ЛК Сбера
-	Scope       string // GIGACHAT_API_PERS | GIGACHAT_API_B2B | GIGACHAT_API_CORP
-	Model       string // GigaChat | GigaChat-Pro | GigaChat-Max
-	OAuthURL    string // https://ngw.devices.sberbank.ru:9443/api/v2/oauth
-	APIURL      string // https://gigachat.devices.sberbank.ru/api/v1
-	Timeout     time.Duration
-	InsecureTLS bool // только для dev без cert Минцифры
-	MaxTokens   int
+	AuthKey      string // base64(client_id:client_secret) из ЛК Сбера
+	Scope        string // GIGACHAT_API_PERS | GIGACHAT_API_B2B | GIGACHAT_API_CORP
+	Model        string // GigaChat | GigaChat-Pro | GigaChat-Max
+	OAuthURL     string // https://ngw.devices.sberbank.ru:9443/api/v2/oauth
+	APIURL       string // https://gigachat.devices.sberbank.ru/api/v1
+	Timeout      time.Duration
+	CABundleFile string // optional PEM bundle with Russian trusted CA certs
+	InsecureTLS  bool   // только для dev без cert Минцифры
+	MaxTokens    int
 }
 
 // Client — потокобезопасный клиент.
@@ -57,8 +60,22 @@ func New(cfg Config) *Client {
 		cfg.Timeout = 20 * time.Second
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
+	if cfg.CABundleFile != "" {
+		pool, err := x509.SystemCertPool()
+		if err != nil || pool == nil {
+			pool = x509.NewCertPool()
+		}
+		if pem, err := os.ReadFile(cfg.CABundleFile); err == nil {
+			if pool.AppendCertsFromPEM(pem) {
+				tr.TLSClientConfig = &tls.Config{RootCAs: pool}
+			}
+		}
+	}
 	if cfg.InsecureTLS {
-		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // dev-only
+		if tr.TLSClientConfig == nil {
+			tr.TLSClientConfig = &tls.Config{}
+		}
+		tr.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec // dev-only
 	}
 	return &Client{
 		cfg:  cfg,
