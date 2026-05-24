@@ -15,6 +15,9 @@
 .env.prod          # production secrets
 deployments/.env.prod  # алиас
 
+# Generated at deploy time by deploy.sh
+deployments/Caddyfile.gen
+
 # Coverage
 *.coverprofile
 coverage.out

@@ -1,24 +1,14 @@
 # =============================================================================
-# Caddyfile — production reverse proxy для MAX University Event Bot
+# Caddyfile — reference template (NOT used directly in production)
 #
-# Режимы:
-#   HTTP (IP или домен без TLS) — работает из коробки:
-#     DOMAIN=1.2.3.4   или   DOMAIN=bot.youruniversity.ru
+# deploy.sh auto-generates Caddyfile.gen based on DOMAIN:
+#   IP address  → http://{$DOMAIN} (no TLS, port 80 only)
+#   Domain name → {$DOMAIN} (HTTPS via Let's Encrypt, ports 80+443)
 #
-#   HTTPS (только с доменом + Let's Encrypt):
-#     Убери "http://" из строки ниже — Caddy автоматически получит сертификат.
-#     Нужен: домен → IP, порт 80 и 443 открыты.
-#
-# Маршрутизация:
-#   http://{DOMAIN}/              → Next.js admin panel (web:3000)
-#   http://{DOMAIN}/api/*         → Next.js → bot:8081 (через rewrite)
-#   http://{DOMAIN}/webhook/max   → Go-бот (bot:8080)
-#   http://{DOMAIN}/healthz       → Go-бот (bot:8080)
+# This file is kept for reference. To change Caddy config, edit the
+# generation logic in scripts/deploy.sh instead.
 # =============================================================================
 
-# "http://" перед доменом = форсированный HTTP, без TLS-сертификата.
-# Работает как с доменом, так и с IP-адресом.
-# Убери "http://" чтобы включить автоматический HTTPS (нужен настоящий домен).
 http://{$DOMAIN} {
 
   # ── Webhook MAX-бота ────────────────────────────────────────────────────

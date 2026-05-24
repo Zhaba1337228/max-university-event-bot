@@ -1,26 +1,27 @@
 # =============================================================================
 # Production docker-compose
 #
-# Архитектура:
+# Architecture:
 #   internet ─── caddy (80/443) ─── web:3000  (Next.js admin panel)
 #                               └── bot:8080  (webhook /webhook/max)
 #
-#   web ──── bot:8081 (admin REST API, только внутри Docker-сети)
-#   bot ──── postgres:5432 (БД, только внутри Docker-сети, наружу не выходит)
+#   web ──── bot:8081 (admin REST API, internal only)
+#   bot ──── postgres:5432 (DB, internal only)
 #
-# Запуск:
-#   cp deployments/.env.prod.example .env.prod
-#   # заполнить .env.prod реальными значениями
-#   docker compose -f deployments/docker-compose.prod.yml up -d --build
+# TLS auto-detection (via deploy.sh):
+#   DOMAIN=1.2.3.4   → HTTP only, Caddy listens on :80 only
+#   DOMAIN=bot.ru     → HTTPS + Let's Encrypt, Caddy listens on :80+:443
+#
+# Both ports are always mapped. Caddy only binds what the Caddyfile requires:
+#   http:// prefix → port 80 only (443 mapped but unused, connections refused)
+#   no prefix      → port 80 (redirect) + 443 (HTTPS)
+#
+# Deploy:
+#   make deploy
 # =============================================================================
 
 services:
 
-  # ──────────────────────────────────────────────────────────────────
-  # PostgreSQL — полностью изолирована от внешней сети.
-  # Нет ports: — снаружи недоступна. Только bot и migrate могут
-  # подключиться через имя хоста "postgres" внутри сети "backend".
-  # ──────────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     environment:
@@ -29,7 +30,6 @@ services:
       POSTGRES_DB:       ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    # Нет ports: — порт 5432 НЕ пробрасывается на хост.
     networks:
       - backend
     healthcheck:
@@ -47,9 +47,6 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  # ──────────────────────────────────────────────────────────────────
-  # Миграции — одноразовый контейнер, завершается сам.
-  # ──────────────────────────────────────────────────────────────────
   migrate:
     build:
       context: ..
@@ -64,11 +61,6 @@ services:
       - backend
     restart: "no"
 
-  # ──────────────────────────────────────────────────────────────────
-  # Go-бот: webhook + admin API.
-  # 8080 (webhook) — через Caddy.
-  # 8081 (admin API) — только внутри сети backend, не наружу.
-  # ──────────────────────────────────────────────────────────────────
   bot:
     build:
       context: ..
@@ -80,8 +72,6 @@ services:
       - ../.env.prod
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
-    # Нет публичных портов — всё через Caddy (frontend сеть)
-    # и напрямую по backend-сети для web.
     networks:
       - backend
       - frontend
@@ -93,11 +83,6 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  # ──────────────────────────────────────────────────────────────────
-  # Next.js admin panel.
-  # Слушает :3000 внутри frontend-сети.
-  # /api/* прокидывается в bot:8081 через rewrite в next.config.mjs.
-  # ──────────────────────────────────────────────────────────────────
   web:
     build:
       context: ../web
@@ -119,13 +104,6 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  # ──────────────────────────────────────────────────────────────────
-  # Caddy — единственная точка входа снаружи.
-  #
-  # Режим по умолчанию: HTTP (порт 80), работает с IP-адресом.
-  # Для HTTPS с доменом: раскомментируй порты 443, убери "http://"
-  # из Caddyfile строки `http://{$DOMAIN}`.
-  # ──────────────────────────────────────────────────────────────────
   caddy:
     image: caddy:2-alpine
     depends_on:
@@ -133,11 +111,10 @@ services:
       - bot
     ports:
       - "80:80"
-      # Раскомментируй для HTTPS (нужен реальный домен → Let's Encrypt):
-      # - "443:443"
-      # - "443:443/udp"   # HTTP/3
+      - "443:443"
+      - "443:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile.gen:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
@@ -146,17 +123,15 @@ services:
     cap_drop:
       - ALL
     cap_add:
-      - NET_BIND_SERVICE   # нужно для bind 80
+      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
 
 networks:
-  # backend: postgres + bot + migrate. Caddy и web не в этой сети.
   backend:
     driver: bridge
-    internal: true          # ← изолирована от хоста и интернета полностью
+    internal: true
 
-  # frontend: caddy + web + bot (только для /webhook и /api через web→bot).
   frontend:
     driver: bridge
 

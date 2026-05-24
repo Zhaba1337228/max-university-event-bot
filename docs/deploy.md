@@ -40,11 +40,11 @@ nano /opt/app/.env.prod
 
 Минимум:
 ```env
-DOMAIN=185.10.20.30          # IP сервера (или домен)
+DOMAIN=185.10.20.30          # IP или домен — всё остальное автоопределяется
 POSTGRES_PASSWORD=сильный_пароль
 MAX_BOT_TOKEN=токен_из_MAX
 ADMIN_SESSION_KEY=$(openssl rand -base64 32)
-MAX_BOT_MODE=longpoll
+# MAX_BOT_MODE — не трогай, авто: IP→longpoll, домен→webhook
 ```
 
 ### 4. Первый деплой вручную
@@ -95,6 +95,8 @@ make deploy --no-build
    ├── :80  (HTTP)  ──→ Caddy ──→ web:3000 (Next.js)
    │                         └──→ bot:8080 (webhook)
    │
+   ├── :443 (HTTPS) ──→ Caddy (только при домене, Let's Encrypt)
+   │
    └── :22  (SSH)  ──→ только для деплоя
 
 Закрыто снаружи:
@@ -107,18 +109,21 @@ make deploy --no-build
 ## Переход на HTTPS (когда будет домен)
 
 1. Установить `A`-запись: `домен → IP сервера`
-2. В `deployments/Caddyfile` убрать `http://` из строки `http://{$DOMAIN}`
-3. В `docker-compose.prod.yml` раскомментировать `443:443`
-4. В `.env.prod` обновить:
+2. В `.env.prod` обновить:
    ```env
    DOMAIN=bot.youruniversity.ru
-   MAX_BOT_MODE=webhook
    MAX_BOT_WEBHOOK_URL=https://bot.youruniversity.ru/webhook/max
    ADMIN_WEB_BASE_URL=https://bot.youruniversity.ru
    ```
-5. `make deploy`
+3. `make deploy`
 
-Caddy автоматически получит сертификат через Let's Encrypt.
+Всё остальное — автоматически:
+- `deploy.sh` определяет домен → генерирует Caddy с HTTPS
+- `MAX_BOT_MODE` переключается на `webhook`
+- Порты 80+443 открываются
+- Caddy получает сертификат через Let's Encrypt
+
+Для возврата на IP — просто поставь `DOMAIN=1.2.3.4` и `make deploy`.
 
 ---
 
