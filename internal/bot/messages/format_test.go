@@ -99,7 +99,7 @@ func TestEventCardContainsAllFields(t *testing.T) {
 		Capacity:    100,
 		Status:      domain.EventStatusOpen,
 	}
-	got := messages.EventCard(ev, 47)
+	got := messages.EventCard(ev, 47, nil)
 
 	mustContain := []string{
 		ev.Title,
@@ -129,12 +129,29 @@ func TestEventCardShortSummaryOverride(t *testing.T) {
 		Format:       domain.EventFormatOnline,
 		Capacity:     1,
 	}
-	got := messages.EventCard(ev, 0)
+	got := messages.EventCard(ev, 0, nil)
 	if !strings.Contains(got, summary) {
 		t.Errorf("EventCard missing short summary %q in:\n%s", summary, got)
 	}
 	if strings.Contains(got, "Длинное описание") {
 		t.Errorf("EventCard leaked long description while short summary is set:\n%s", got)
+	}
+}
+
+func TestEventCardRegisteredStatusLine(t *testing.T) {
+	t.Parallel()
+
+	ev := &domain.Event{
+		Title:       "День открытых дверей",
+		Description: "Описание",
+		StartsAt:    time.Now(),
+		Location:    "Главный корпус",
+		Format:      domain.EventFormatOffline,
+		Capacity:    50,
+	}
+	got := messages.EventCard(ev, 49, &domain.Registration{Status: domain.RegStatusRegistered})
+	if !strings.Contains(got, "Статус: вы уже записаны") {
+		t.Errorf("EventCard missing registered status line in:\n%s", got)
 	}
 }
 

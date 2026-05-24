@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -22,6 +23,8 @@ type EventsHandler struct {
 	api    *maxclient.Client
 	fsm    *fsm.Manager
 	events service.Event
+	users  service.User
+	regs   service.Registration
 	log    *slog.Logger
 	// businessWaitlistEnabled определяет, рисовать ли «Встать в лист ожидания»
 	// в карточке когда мест нет. Берётся из cfg.Business.WaitlistEnabled.
@@ -30,12 +33,14 @@ type EventsHandler struct {
 
 // NewEventsHandler — конструктор.
 func NewEventsHandler(api *maxclient.Client, fsmMgr *fsm.Manager, ev service.Event,
-	log *slog.Logger, waitlistEnabled bool,
+	users service.User, regs service.Registration, log *slog.Logger, waitlistEnabled bool,
 ) *EventsHandler {
 	return &EventsHandler{
 		api:                     api,
 		fsm:                     fsmMgr,
 		events:                  ev,
+		users:                   users,
+		regs:                    regs,
 		log:                     log.With("handler", "events"),
 		businessWaitlistEnabled: waitlistEnabled,
 	}
@@ -142,11 +147,36 @@ func (h *EventsHandler) showCard(ctx context.Context, chatID, userID int64, even
 	snap.Context.CurrentEventID = withFree.Event.ID
 	_ = h.fsm.Save(ctx, userID, fsm.StateEventDetails, snap.Context)
 
-	text := messages.EventCard(withFree.Event, withFree.FreeSeats)
-	kb := keyboards.EventCard(withFree.Event.ID, withFree.FreeSeats, h.businessWaitlistEnabled, snap.Context.Offset)
+	activeReg, err := h.activeRegistration(ctx, userID, withFree.Event.ID)
+	if err != nil {
+		h.log.Warn("lookup active registration failed", "err", err, "user_id", userID, "event_id", eventID)
+	}
+
+	text := messages.EventCard(withFree.Event, withFree.FreeSeats, activeReg)
+	kb := keyboards.EventCard(withFree.Event.ID, withFree.FreeSeats, h.businessWaitlistEnabled, snap.Context.Offset, activeReg)
 	if err := h.api.SendTextWithKeyboard(ctx, chatID, text, kb); err != nil {
 		h.log.Error("send card failed", "err", err)
 	}
+}
+
+func (h *EventsHandler) activeRegistration(ctx context.Context, userMaxID, eventID int64) (*domain.Registration, error) {
+	if h.users == nil || h.regs == nil {
+		return nil, nil
+	}
+
+	user, err := h.users.GetByMaxID(ctx, userMaxID)
+	if err != nil {
+		return nil, fmt.Errorf("get user by max id: %w", err)
+	}
+	if user == nil {
+		return nil, nil
+	}
+
+	reg, err := h.regs.GetActive(ctx, user.ID, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("get active registration: %w", err)
+	}
+	return reg, nil
 }
 
 // showDetails — кнопка «Подробнее»: расширенная карточка со всем описанием и условиями.

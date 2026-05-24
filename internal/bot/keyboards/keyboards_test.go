@@ -63,7 +63,7 @@ func TestEventListWithPaging(t *testing.T) {
 func TestEventCardFreeSeats(t *testing.T) {
 	t.Parallel()
 
-	kb := keyboards.EventCard(42, 5, true, 0)
+	kb := keyboards.EventCard(42, 5, true, 0, nil)
 	rows := kb.Build().Buttons
 
 	// «Записаться» + «Назад к списку» + «В главное меню» = 3
@@ -85,21 +85,36 @@ func TestEventCardFreeSeats(t *testing.T) {
 func TestEventCardWaitlist(t *testing.T) {
 	t.Parallel()
 
-	kb := keyboards.EventCard(42, 0, true, 0)
-	firstBtn := kb.Build().Buttons[0][0].(schemes.CallbackButton)
-	if !strings.Contains(firstBtn.Text, "лист ожидания") {
-		t.Errorf("want 'лист ожидания' button, got %q", firstBtn.Text)
+	kb := keyboards.EventCard(42, 0, true, 0, nil)
+	if !hasCallbackText(kb.Build(), "лист ожидания") {
+		t.Errorf("want 'лист ожидания' button")
 	}
 }
 
 func TestEventCardNoWaitlistAndNoSeats(t *testing.T) {
 	t.Parallel()
 
-	kb := keyboards.EventCard(42, 0, false, 0)
+	kb := keyboards.EventCard(42, 0, false, 0, nil)
 	rows := kb.Build().Buttons
-	// только «Назад к списку» + «В главное меню»
-	if len(rows) != 2 {
-		t.Errorf("want 2 rows when no seats and no waitlist, got %d", len(rows))
+	// «Подробнее» + «Назад к списку» + «В главное меню»
+	if len(rows) != 3 {
+		t.Errorf("want 3 rows when no seats and no waitlist, got %d", len(rows))
+	}
+}
+
+func TestEventCardRegisteredUser(t *testing.T) {
+	t.Parallel()
+
+	kb := keyboards.EventCard(42, 5, true, 0, &domain.Registration{Status: domain.RegStatusRegistered})
+	rows := kb.Build().Buttons
+	if len(rows) != 3 {
+		t.Fatalf("want 3 rows for registered user card, got %d", len(rows))
+	}
+	if !hasCallbackText(kb.Build(), "Моя запись") {
+		t.Errorf("registered user card: missing 'Моя запись' button")
+	}
+	if hasCallbackText(kb.Build(), "Записаться") {
+		t.Errorf("registered user card: unexpected 'Записаться' button")
 	}
 }
 

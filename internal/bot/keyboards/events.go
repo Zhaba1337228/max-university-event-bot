@@ -62,9 +62,17 @@ func EventDetailsBack(eventID int64, backOffset int) *maxbot.Keyboard {
 //
 // Кнопка «Назад» всегда возвращает на ту же страницу списка, где находился
 // пользователь до открытия карточки (offset передаётся вызывающим).
-func EventCard(eventID int64, freeSeats int, waitlistEnabled bool, backOffset int) *maxbot.Keyboard {
+func EventCard(eventID int64, freeSeats int, waitlistEnabled bool, backOffset int, activeReg *domain.Registration) *maxbot.Keyboard {
 	kb := newKB()
-	if freeSeats > 0 {
+	if activeReg != nil {
+		label := "Моя запись"
+		if activeReg.Status == domain.RegStatusWaitlist {
+			label = "Моя запись (лист ожидания)"
+		}
+		kb.AddRow().
+			AddCallback(label, schemes.POSITIVE, callbacks.MyShow()).
+			AddCallback("Подробнее", schemes.DEFAULT, callbacks.EventDetails(eventID))
+	} else if freeSeats > 0 {
 		kb.AddRow().
 			AddCallback("Записаться", schemes.POSITIVE, callbacks.RegStart(eventID)).
 			AddCallback("Подробнее", schemes.DEFAULT, callbacks.EventDetails(eventID))

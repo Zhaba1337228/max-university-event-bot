@@ -70,7 +70,8 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 	}
 	h.Start = handlers.NewStartHandler(cfg.API, cfg.FSM, cfg.Log)
 	h.Fallback = handlers.NewFallbackHandler(cfg.API, cfg.FSM, cfg.Log)
-	h.Events = handlers.NewEventsHandler(cfg.API, cfg.FSM, cfg.Events, cfg.Log, cfg.WaitlistEnabled)
+	h.Events = handlers.NewEventsHandler(cfg.API, cfg.FSM, cfg.Events,
+		cfg.Users, cfg.Registration, cfg.Log, cfg.WaitlistEnabled)
 	h.Registration = handlers.NewRegistrationHandler(cfg.API, cfg.FSM,
 		cfg.Registration, cfg.Users, cfg.Events,
 		cfg.QR, cfg.RegsRepo, cfg.DB,

@@ -138,7 +138,7 @@ func EventListItem(idx int, e *domain.Event) string {
 }
 
 // EventCard — карточка одного мероприятия.
-func EventCard(e *domain.Event, freeSeats int) string {
+func EventCard(e *domain.Event, freeSeats int, activeReg *domain.Registration) string {
 	summary := e.Description
 	if e.ShortSummary != nil && *e.ShortSummary != "" {
 		summary = *e.ShortSummary
@@ -151,16 +151,23 @@ func EventCard(e *domain.Event, freeSeats int) string {
 	if freeSeats == 0 {
 		seatsLine = "Мест нет"
 	}
-	return joinLines(
+	lines := []string{
 		e.Title,
 		"",
 		"Когда: "+timeStr,
 		"Где: "+e.Location,
 		"Формат: "+HumanFormat(e.Format),
 		seatsLine,
-		"",
-		summary,
-	)
+	}
+	if activeReg != nil {
+		statusLine := "Статус: вы уже записаны"
+		if activeReg.Status == domain.RegStatusWaitlist {
+			statusLine = "Статус: вы в листе ожидания"
+		}
+		lines = append(lines, statusLine)
+	}
+	lines = append(lines, "", summary)
+	return joinLines(lines...)
 }
 
 // EventDetails — расширенная карточка по кнопке «Подробнее».
