@@ -89,10 +89,10 @@ deploy-logs:
 	@bash scripts/deploy.sh --logs
 
 prod-down:
-	docker compose -f deployments/docker-compose.prod.yml down
+	docker compose --env-file .env.prod -f deployments/docker-compose.prod.yml down
 
 prod-logs:
-	docker compose -f deployments/docker-compose.prod.yml logs -f --tail=100
+	docker compose --env-file .env.prod -f deployments/docker-compose.prod.yml logs -f --tail=100
 
 seed:
 	$(GO) run ./cmd/migrate up

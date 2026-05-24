@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-COMPOSE="docker compose -f deployments/docker-compose.prod.yml"
+COMPOSE="docker compose --env-file .env.prod -f deployments/docker-compose.prod.yml"
 ENV_FILE=".env.prod"
 NO_BUILD=false
 SHOW_LOGS=false

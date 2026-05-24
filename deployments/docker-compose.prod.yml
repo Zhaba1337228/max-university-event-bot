@@ -24,6 +24,8 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    env_file:
+      - ../.env.prod
     environment:
       POSTGRES_USER:     ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -33,7 +35,7 @@ services:
     networks:
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -42,6 +44,9 @@ services:
     cap_drop:
       - ALL
     cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
       - SETUID
       - SETGID
     security_opt:
@@ -54,6 +59,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - ../.env.prod
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
     entrypoint: ["/app/migrate", "up"]
