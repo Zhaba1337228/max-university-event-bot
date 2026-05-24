@@ -132,6 +132,9 @@ func (c *Client) SendMessage(ctx context.Context, msg *maxbot.Message) error {
 // AnswerCallback закрывает спиннер на нажатой кнопке.
 // Если notification != "" — пользователь увидит toast.
 func (c *Client) AnswerCallback(ctx context.Context, callbackID string, notification string) error {
+	if notification == "" {
+		return nil
+	}
 	cb := &schemes.CallbackAnswer{}
 	if notification != "" {
 		cb.Notification = notification

@@ -43,11 +43,17 @@ func OrganizerEventActions(eventID int64, status domain.EventStatus) *maxbot.Key
 // OrganizerParticipants — навигация по постраничному списку участников.
 func OrganizerParticipants(eventID int64, offset, total, perPage int) *maxbot.Keyboard {
 	kb := newKB()
-	navRow := kb.AddRow()
+	var navRow *maxbot.KeyboardRow
 	if offset >= perPage {
+		if navRow == nil {
+			navRow = kb.AddRow()
+		}
 		navRow.AddCallback("Назад", schemes.DEFAULT, callbacks.OrgListParticipants(eventID, offset-perPage))
 	}
 	if offset+perPage < total {
+		if navRow == nil {
+			navRow = kb.AddRow()
+		}
 		navRow.AddCallback("Дальше", schemes.DEFAULT, callbacks.OrgListParticipants(eventID, offset+perPage))
 	}
 	kb.AddRow().AddCallback("Экспорт CSV", schemes.DEFAULT, callbacks.OrgListExport(eventID))

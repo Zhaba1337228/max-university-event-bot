@@ -33,9 +33,9 @@ func TestEventListEmpty(t *testing.T) {
 
 	kb := keyboards.EventList(nil, 0, false)
 	rows := kb.Build().Buttons
-	// 2 ряда: пустая навигация (без кнопок) + «в главное меню»
-	if len(rows) != 2 {
-		t.Errorf("want 2 rows for empty list, got %d", len(rows))
+	// Без пустых рядов: только «в главное меню».
+	if len(rows) != 1 {
+		t.Errorf("want 1 row for empty list, got %d", len(rows))
 	}
 }
 

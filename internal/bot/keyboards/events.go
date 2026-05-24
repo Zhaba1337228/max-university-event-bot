@@ -24,11 +24,17 @@ func EventList(events []*domain.Event, offset int, hasMore bool) *maxbot.Keyboar
 	}
 
 	// Навигация — отдельным рядом.
-	navRow := kb.AddRow()
+	var navRow *maxbot.KeyboardRow
 	if offset >= pageSize {
+		if navRow == nil {
+			navRow = kb.AddRow()
+		}
 		navRow.AddCallback("Назад", schemes.DEFAULT, callbacks.EventListPage(offset-pageSize))
 	}
 	if hasMore {
+		if navRow == nil {
+			navRow = kb.AddRow()
+		}
 		navRow.AddCallback("Дальше", schemes.DEFAULT, callbacks.EventListPage(offset+pageSize))
 	}
 
