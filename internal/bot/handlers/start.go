@@ -6,6 +6,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/max-messenger/max-bot-api-client-go/schemes"
@@ -50,6 +51,28 @@ func (h *StartHandler) OnStart(ctx context.Context, upd *schemes.MessageCreatedU
 	userID := upd.Message.Sender.UserId
 	name := upd.Message.Sender.FirstName
 	h.greet(ctx, chatID, userID, name)
+}
+
+// OnWhoami — команда /whoami. Показывает MAX user_id отправителя.
+// Нужно, чтобы организатор мог быстро добавить себя в ADMIN_USER_IDS / ORGANIZER_USER_IDS.
+func (h *StartHandler) OnWhoami(ctx context.Context, upd *schemes.MessageCreatedUpdate) {
+	chatID := upd.Message.Recipient.ChatId
+	userID := upd.Message.Sender.UserId
+	name := upd.Message.Sender.FirstName
+	username := upd.Message.Sender.Username
+
+	text := fmt.Sprintf("🆔 Ваш MAX user_id:\n\n`%d`\n\n", userID)
+	if name != "" {
+		text += fmt.Sprintf("Имя: %s\n", name)
+	}
+	if username != "" {
+		text += fmt.Sprintf("Username: @%s\n", username)
+	}
+	text += "\nЧтобы получить доступ к админке — попроси администратора добавить этот ID в роли organizer/admin."
+
+	if err := h.api.SendText(ctx, chatID, text); err != nil {
+		h.log.Error("send whoami failed", "err", err, "chat_id", chatID)
+	}
 }
 
 // OnHelp — команда /help.

@@ -109,6 +109,9 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 	case "/help":
 		h.Start.OnHelp(ctx, upd)
 		return
+	case "/whoami", "/id", "/myid":
+		h.Start.OnWhoami(ctx, upd)
+		return
 	case "/forget_me":
 		h.MyReg.OnForgetMeCmd(ctx, upd)
 		return
