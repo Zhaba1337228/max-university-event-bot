@@ -193,7 +193,7 @@ func (h *OrganizerHandler) showAISummary(ctx context.Context, chatID, userMaxID,
 		return
 	}
 
-	text := "AI-сводка по «" + ev.Title + "»:\n\n" + summary
+	text := messages.AIOrganizerSummary(ev.Title, summary)
 	if err := h.api.SendTextWithKeyboard(ctx, chatID, text,
 		keyboards.OrganizerEventActions(eventID, ev.Status)); err != nil {
 		h.log.Error("send ai summary failed", "err", err)

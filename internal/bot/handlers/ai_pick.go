@@ -107,7 +107,6 @@ func (h *AIPickHandler) OnText(ctx context.Context, upd *schemes.MessageCreatedU
 
 	// Собираем текст + клавиатуру с кнопкой «Записаться» на каждую рекомендацию.
 	var sb strings.Builder
-	sb.WriteString("Подобрал для вас:\n\n")
 	kb := &maxbot.Keyboard{}
 	for i, r := range recs {
 		sb.WriteString(strings.TrimSpace(r.Title))
@@ -122,7 +121,7 @@ func (h *AIPickHandler) OnText(ctx context.Context, upd *schemes.MessageCreatedU
 	}
 	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
 
-	if err := h.api.SendTextWithKeyboard(ctx, chatID, sb.String(), kb); err != nil {
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.AIRecommendation(sb.String()), kb); err != nil {
 		h.log.Error("send ai recs failed", "err", err)
 	}
 }

@@ -214,7 +214,7 @@ func (h *OrganizerNotifyHandler) onAIRewrite(ctx context.Context, chatID, userMa
 	_ = h.fsm.Save(ctx, userMaxID, fsm.StateOrganizerNotifConfirm, snap.Context)
 
 	count, _ := h.regs.CountByEvent(ctx, h.q, snap.Context.OrganizerEventID, domain.RegStatusRegistered)
-	preview := "Текст улучшен через ИИ:\n\n" + messages.OrganizerNotifPreview(improved, count)
+	preview := messages.AIOrganizerNotifPreview(improved, count)
 	if err := h.api.SendTextWithKeyboard(ctx, chatID, preview, keyboards.OrganizerNotifConfirm()); err != nil {
 		h.log.Error("send ai preview failed", "err", err)
 	}

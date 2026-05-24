@@ -154,9 +154,9 @@ func EventCard(e *domain.Event, freeSeats int, activeReg *domain.Registration) s
 	lines := []string{
 		e.Title,
 		"",
-		"Когда: "+timeStr,
-		"Где: "+e.Location,
-		"Формат: "+HumanFormat(e.Format),
+		"Когда: " + timeStr,
+		"Где: " + e.Location,
+		"Формат: " + HumanFormat(e.Format),
 		seatsLine,
 	}
 	if activeReg != nil {
@@ -645,8 +645,43 @@ func AIUnavailable() string {
 	return "Подбор временно недоступен. Покажу обычный список мероприятий."
 }
 
+// AIWarningNote — короткая плашка о том, что ИИ может ошибаться.
+func AIWarningNote() string {
+	return "Важно: ИИ может ошибаться. Проверьте детали перед использованием."
+}
+
 // AIRecommendation — обёртка над текстом, полученным от AI.
-func AIRecommendation(text string) string { return text }
+func AIRecommendation(text string) string {
+	return joinLines(
+		"Подобрал для вас:",
+		"",
+		text,
+		"",
+		AIWarningNote(),
+	)
+}
+
+// AIOrganizerSummary — форматирует AI-сводку для организатора.
+func AIOrganizerSummary(title, summary string) string {
+	return joinLines(
+		"AI-сводка по «"+title+"»:",
+		"",
+		summary,
+		"",
+		AIWarningNote(),
+	)
+}
+
+// AIOrganizerNotifPreview — форматирует AI-улучшенный текст рассылки.
+func AIOrganizerNotifPreview(text string, recipients int) string {
+	return joinLines(
+		"Текст улучшен через ИИ:",
+		"",
+		OrganizerNotifPreview(text, recipients),
+		"",
+		AIWarningNote(),
+	)
+}
 
 // =============================================================================
 // Системные / fallback
