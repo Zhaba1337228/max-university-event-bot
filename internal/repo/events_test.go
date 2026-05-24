@@ -123,7 +123,7 @@ func TestEventsStatsHappyPath(t *testing.T) {
 		WithArgs(int64(1)).
 		WillReturnRows(pgxmock.NewRows([]string{
 			"capacity", "registered", "cancelled", "waitlist", "attended", "no_show",
-		}).AddRow(100, 60, 5, 10, 0, 0))
+		}).AddRow(100, 60, 5, 10, 7, 0))
 
 	// 2) top interests
 	mock.ExpectQuery(`interest_program, COUNT`).
@@ -136,7 +136,7 @@ func TestEventsStatsHappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
-	if stats.Capacity != 100 || stats.Registered != 60 || stats.FreeSeats != 40 {
+	if stats.Capacity != 100 || stats.Registered != 60 || stats.Attended != 7 || stats.FreeSeats != 33 {
 		t.Errorf("counts wrong: %+v", stats)
 	}
 	if stats.TopInterests["Прикладная информатика"] != 30 {

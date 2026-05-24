@@ -247,7 +247,7 @@ GROUP BY e.id, e.capacity`
 		}
 		return nil, fmt.Errorf("stats counts: %w", err)
 	}
-	stats.FreeSeats = stats.Capacity - stats.Registered
+	stats.FreeSeats = stats.Capacity - stats.Registered - stats.Attended
 	if stats.FreeSeats < 0 {
 		stats.FreeSeats = 0
 	}

@@ -25,7 +25,8 @@ const (
 
 // Event — мероприятие университета.
 //
-// Capacity — целевое число мест; остаток считается через CountByEvent(registered).
+// Capacity — целевое число мест; остаток считается по занятым местам
+// (registered + attended).
 // Tags используется для AI-подбора по интересу абитуриента.
 type Event struct {
 	ID                int64
