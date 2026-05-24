@@ -14,7 +14,6 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 	original := fsm.UserFSMContext{
 		CurrentEventID:   42,
 		DraftFullName:    "Иванов Иван Иванович",
-		DraftContact:     "+7 999 123 45 67",
 		DraftInterest:    "Прикладная информатика",
 		CancelRegID:      77,
 		OrganizerEventID: 5,
@@ -84,7 +83,6 @@ func TestIsTextInput(t *testing.T) {
 
 	textInputStates := []fsm.State{
 		fsm.StateRegFullName,
-		fsm.StateRegContact,
 		fsm.StateRegInterest,
 		fsm.StateAIPickIntent,
 		fsm.StateOrganizerNotifText,

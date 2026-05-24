@@ -69,7 +69,7 @@ func ConsentAsk(policyVer string) string {
 	return joinLines(
 		"Чтобы записать вас на мероприятие, необходимо согласие на обработку персональных данных.",
 		"",
-		"Что мы храним: ФИО и контакт (телефон или email) — только чтобы пригласить вас на мероприятие, отправить напоминания и подтверждение участия.",
+		"Что мы храним: ФИО — только чтобы оформить запись на мероприятие и подтвердить участие.",
 		"",
 		"Срок хранения: до 1 года или до отзыва согласия.",
 		"",
@@ -213,16 +213,6 @@ func InvalidFullName() string {
 	return "Похоже на неполное ФИО. Пожалуйста, отправьте фамилию, имя и отчество одним сообщением."
 }
 
-// AskContact — шаг reg_contact.
-func AskContact() string {
-	return "Оставьте телефон или email - мы вышлем подтверждение и напоминание."
-}
-
-// InvalidContact — валидация не прошла.
-func InvalidContact() string {
-	return "Не похоже на телефон или email. Пример: +7 999 123-45-67 или name@example.com."
-}
-
 // AskInterest — шаг reg_interest.
 func AskInterest() string {
 	return joinLines(
@@ -245,7 +235,6 @@ func RegConfirmation(e *domain.Event, ctxFSM fsm.UserFSMContext) string {
 		"Формат: "+HumanFormat(e.Format),
 		"",
 		"ФИО: "+ctxFSM.DraftFullName,
-		"Контакт: "+ctxFSM.DraftContact,
 		"Направление: "+ctxFSM.DraftInterest,
 		"",
 		"Запись можно будет отменить до начала мероприятия — место вернётся в пул.",

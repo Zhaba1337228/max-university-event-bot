@@ -22,7 +22,6 @@ const (
 
 	StateRegConsent      = "reg_consent" // 152-ФЗ — согласие на ПДн
 	StateRegFullName     = "reg_full_name"
-	StateRegContact      = "reg_contact"
 	StateRegInterest     = "reg_interest"
 	StateRegConfirmation = "reg_confirmation"
 
@@ -51,7 +50,6 @@ const (
 func IsTextInput(s State) bool {
 	switch s {
 	case StateRegFullName,
-		StateRegContact,
 		StateRegInterest,
 		StateAIPickIntent,
 		StateOrganizerNotifText,

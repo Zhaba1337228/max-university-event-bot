@@ -12,7 +12,6 @@ type UserFSMContext struct {
 
 	// Registration draft (FSM шаги reg_*).
 	DraftFullName string `json:"draft_full_name,omitempty"`
-	DraftContact  string `json:"draft_contact,omitempty"`
 	DraftInterest string `json:"draft_interest,omitempty"`
 
 	// Cancellation.

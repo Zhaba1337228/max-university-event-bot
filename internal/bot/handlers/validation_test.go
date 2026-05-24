@@ -1,7 +1,7 @@
 package handlers
 
-// Тесты на приватные валидаторы validFullName / validContact.
-// Поскольку они приватные, тест в том же пакете (без _test suffix).
+// Тесты на приватный валидатор validFullName.
+// Поскольку он приватный, тест в том же пакете (без _test suffix).
 
 import (
 	"strings"
@@ -28,30 +28,6 @@ func TestValidFullName(t *testing.T) {
 		got := validFullName(in)
 		if got != want {
 			t.Errorf("validFullName(%q) = %v, want %v", in, got, want)
-		}
-	}
-}
-
-func TestValidContact(t *testing.T) {
-	t.Parallel()
-
-	cases := map[string]bool{
-		"":                         false,
-		"x":                        false,
-		"name@example.com":         true,
-		"a@b.c":                    true,
-		"+7 999 123-45-67":         true,
-		"+79991234567":             true,
-		"79991234567":              true,
-		"123456":                   false, // < 7 цифр
-		"abc-def":                  false, // ни email, ни телефон
-		"name@example":             false, // нет точки
-		"phone: 8 (999) 123-45-67": true,
-	}
-	for in, want := range cases {
-		got := validContact(in)
-		if got != want {
-			t.Errorf("validContact(%q) = %v, want %v", in, got, want)
 		}
 	}
 }

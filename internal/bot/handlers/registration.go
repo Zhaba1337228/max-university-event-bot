@@ -21,14 +21,13 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 )
 
-// RegistrationHandler — FSM сценарий «согласие на ПДн → ФИО → контакт → направление → подтверждение».
+// RegistrationHandler — FSM сценарий «согласие на ПДн → ФИО → направление → подтверждение».
 //
 // Состояния (см. internal/bot/fsm/states.go):
 //
 //	StateRegConsent    — пользователь не давал consent, ждём «Согласен/Отмена»
-//	StateRegFullName   — ждём текст ФИО
-//	StateRegContact    — ждём текст контакт (телефон/email)
-//	StateRegInterest   — ждём направление (текст)
+//	StateRegFullName     — ждём текст ФИО
+//	StateRegInterest     — ждём направление (текст)
 //	StateRegConfirmation — отрисована карточка с кнопками «Подтвердить/Изменить/Отменить»
 type RegistrationHandler struct {
 	api           *maxclient.Client
@@ -97,7 +96,7 @@ func (h *RegistrationHandler) OnCallback(ctx context.Context, upd *schemes.Messa
 	}
 }
 
-// OnText — обработка текста в reg_full_name / reg_contact / reg_interest.
+// OnText — обработка текста в reg_full_name / reg_interest.
 func (h *RegistrationHandler) OnText(ctx context.Context, upd *schemes.MessageCreatedUpdate, snap fsm.Snapshot) {
 	chatID := upd.Message.Recipient.ChatId
 	userMaxID := upd.Message.Sender.UserId
@@ -106,8 +105,6 @@ func (h *RegistrationHandler) OnText(ctx context.Context, upd *schemes.MessageCr
 	switch snap.State {
 	case fsm.StateRegFullName:
 		h.onFullName(ctx, chatID, userMaxID, snap, text)
-	case fsm.StateRegContact:
-		h.onContact(ctx, chatID, userMaxID, snap, text)
 	case fsm.StateRegInterest:
 		h.onInterest(ctx, chatID, userMaxID, snap, text)
 	default:
@@ -213,7 +210,6 @@ func (h *RegistrationHandler) onConfirm(ctx context.Context, chatID, userMaxID i
 		UserID:          user.ID,
 		EventID:         snap.Context.CurrentEventID,
 		FullName:        snap.Context.DraftFullName,
-		Contact:         snap.Context.DraftContact,
 		InterestProgram: snap.Context.DraftInterest,
 	})
 	switch {
@@ -341,7 +337,6 @@ func (h *RegistrationHandler) sendQRCode(ctx context.Context, chatID, regID int6
 func (h *RegistrationHandler) onEdit(ctx context.Context, chatID, userMaxID int64) {
 	snap, _ := h.fsm.Load(ctx, userMaxID)
 	snap.Context.DraftFullName = ""
-	snap.Context.DraftContact = ""
 	snap.Context.DraftInterest = ""
 	_ = h.fsm.Save(ctx, userMaxID, fsm.StateRegFullName, snap.Context)
 	h.sendText(ctx, chatID, messages.AskFullName())
@@ -362,16 +357,6 @@ func (h *RegistrationHandler) onFullName(ctx context.Context, chatID, userMaxID 
 		return
 	}
 	snap.Context.DraftFullName = text
-	_ = h.fsm.Save(ctx, userMaxID, fsm.StateRegContact, snap.Context)
-	h.sendText(ctx, chatID, messages.AskContact())
-}
-
-func (h *RegistrationHandler) onContact(ctx context.Context, chatID, userMaxID int64, snap fsm.Snapshot, text string) {
-	if !validContact(text) {
-		h.sendText(ctx, chatID, messages.InvalidContact())
-		return
-	}
-	snap.Context.DraftContact = text
 	_ = h.fsm.Save(ctx, userMaxID, fsm.StateRegInterest, snap.Context)
 	h.sendText(ctx, chatID, messages.AskInterest())
 }
@@ -425,22 +410,4 @@ func validFullName(s string) bool {
 		return false
 	}
 	return strings.Contains(strings.TrimSpace(s), " ")
-}
-
-// validContact — email (@ + .) ИЛИ ≥7 цифр (телефон).
-func validContact(s string) bool {
-	s = strings.TrimSpace(s)
-	if len(s) > 200 {
-		return false
-	}
-	if strings.Contains(s, "@") && strings.Contains(s, ".") {
-		return true
-	}
-	digits := 0
-	for _, r := range s {
-		if r >= '0' && r <= '9' {
-			digits++
-		}
-	}
-	return digits >= 7
 }
