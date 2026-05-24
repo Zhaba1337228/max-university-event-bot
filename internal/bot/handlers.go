@@ -137,7 +137,7 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 	}
 
 	switch snap.State {
-	case fsm.StateRegFullName, fsm.StateRegInterest:
+	case fsm.StateRegFullName, fsm.StateRegContact, fsm.StateRegInterest:
 		h.Registration.OnText(ctx, upd, snap)
 	case fsm.StateOrganizerNotifText:
 		h.OrgNotify.OnText(ctx, upd, snap)

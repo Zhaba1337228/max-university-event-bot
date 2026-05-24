@@ -27,6 +27,7 @@ import (
 //
 //	StateRegConsent    — пользователь не давал consent, ждём «Согласен/Отмена»
 //	StateRegFullName     — ждём текст ФИО
+//	StateRegContact      — legacy-совместимость для старых диалогов, переводим на reg_interest
 //	StateRegInterest     — ждём направление (текст)
 //	StateRegConfirmation — отрисована карточка с кнопками «Подтвердить/Изменить/Отменить»
 type RegistrationHandler struct {
@@ -105,6 +106,8 @@ func (h *RegistrationHandler) OnText(ctx context.Context, upd *schemes.MessageCr
 	switch snap.State {
 	case fsm.StateRegFullName:
 		h.onFullName(ctx, chatID, userMaxID, snap, text)
+	case fsm.StateRegContact:
+		h.onLegacyContactStep(ctx, chatID, userMaxID, snap)
 	case fsm.StateRegInterest:
 		h.onInterest(ctx, chatID, userMaxID, snap, text)
 	default:
@@ -359,6 +362,11 @@ func (h *RegistrationHandler) onFullName(ctx context.Context, chatID, userMaxID 
 	snap.Context.DraftFullName = text
 	_ = h.fsm.Save(ctx, userMaxID, fsm.StateRegInterest, snap.Context)
 	h.sendText(ctx, chatID, messages.AskInterest())
+}
+
+func (h *RegistrationHandler) onLegacyContactStep(ctx context.Context, chatID, userMaxID int64, snap fsm.Snapshot) {
+	_ = h.fsm.Save(ctx, userMaxID, fsm.StateRegInterest, snap.Context)
+	h.sendText(ctx, chatID, "Контакт больше не нужен. Напишите, какое направление вам интересно.")
 }
 
 func (h *RegistrationHandler) onInterest(ctx context.Context, chatID, userMaxID int64, snap fsm.Snapshot, text string) {

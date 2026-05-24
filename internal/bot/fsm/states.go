@@ -22,6 +22,7 @@ const (
 
 	StateRegConsent      = "reg_consent" // 152-ФЗ — согласие на ПДн
 	StateRegFullName     = "reg_full_name"
+	StateRegContact      = "reg_contact" // legacy compatibility for in-flight dialogs
 	StateRegInterest     = "reg_interest"
 	StateRegConfirmation = "reg_confirmation"
 
