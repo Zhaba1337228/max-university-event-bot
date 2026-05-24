@@ -52,7 +52,9 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
     // Staff: только /checkin. Любая попытка зайти на организаторские страницы
     // → редирект на /checkin. Так у волонтёра нет лишних разделов.
     if (role === "staff") {
-      const allowed = pathname === "/checkin" || pathname.startsWith("/forbidden");
+      const allowed =
+        pathname === "/checkin" ||
+        pathname.startsWith("/forbidden");
       if (!allowed) {
         router.replace("/checkin");
       }

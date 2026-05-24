@@ -7,10 +7,36 @@ import { useMe } from "@/components/me-context";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Toast } from "@/components/ui/toast";
 import { fmtDate } from "@/lib/format";
+import {
+  IconUsers,
+  IconSearch,
+  IconShield,
+  IconUser,
+  IconArrowLeft,
+  IconArrowRight,
+} from "@/components/ui/icons";
 
 const ROLES: Role[] = ["applicant", "organizer", "staff", "admin"];
 const PAGE_SIZE = 50;
+
+// Role badge styles
+const roleBadge: Record<Role, string> = {
+  admin: "bg-accent/15 text-accent border border-accent/25",
+  organizer: "bg-blue-500/15 text-blue-400 border border-blue-400/25",
+  staff: "bg-emerald-500/15 text-emerald-400 border border-emerald-400/25",
+  applicant: "bg-muted text-subtle border border-border",
+};
+
+function RolePill({ role }: { role: Role }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${roleBadge[role]}`}>
+      {role === "admin" && <IconShield size={10} />}
+      {roleLabel(role) || role}
+    </span>
+  );
+}
 
 export default function UsersPage() {
   const me = useMe();
@@ -95,39 +121,46 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Пользователи</h1>
-        <p className="mt-1 text-sm text-subtle">
-          Управление ролями. Доступно только администраторам. Изменения попадают
-          в audit log.
-        </p>
+    <div className="space-y-6 page-enter">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Пользователи</h1>
+          <p className="mt-1 text-sm text-subtle">
+            Управление ролями. Только для администраторов — изменения попадают в audit log.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="rounded-lg border border-border bg-muted/60 px-3 py-1.5">
+            <span className="text-xs text-subtle">Всего: </span>
+            <span className="text-sm font-semibold text-text">{total}</span>
+          </div>
+        </div>
       </div>
 
-      {err && <p className="text-danger">{err}</p>}
+      {err && <Toast message={err} kind="error" onDismiss={() => setErr(null)} />}
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            Всего: {total}
-            {total > 0 && (
-              <span className="ml-2 text-sm text-subtle">
-                · показано {items.length}
-              </span>
-            )}
+          <CardTitle className="flex items-center gap-2">
+            <IconUsers size={16} className="text-subtle" />
+            Список пользователей
           </CardTitle>
         </CardHeader>
         <CardBody>
+          {/* Search / filters */}
           <form
             onSubmit={onSearch}
             className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center"
           >
-            <Input
-              placeholder="Поиск по ФИО, телефону или email"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="sm:flex-1"
-            />
+            <div className="relative flex-1">
+              <IconSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
+              <Input
+                placeholder="Поиск по ФИО, телефону или email"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="pl-8"
+              />
+            </div>
             <select
               value={roleFilter}
               onChange={(e) => {
@@ -136,7 +169,7 @@ export default function UsersPage() {
                 setOffset(0);
                 load(0, v, query);
               }}
-              className="rounded-md border border-border bg-muted/70 px-3 py-2.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/50 sm:w-48"
+              className="rounded-md border border-border bg-muted/70 px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-accent/30 sm:w-44"
             >
               <option value="">Все роли</option>
               {ROLES.map((r) => (
@@ -145,15 +178,52 @@ export default function UsersPage() {
                 </option>
               ))}
             </select>
-            <Button type="submit" variant="primary" className="sm:w-auto">
+            <Button type="submit" className="gap-1.5 sm:w-auto">
+              <IconSearch size={13} />
               Найти
             </Button>
           </form>
 
+          {/* Role filter pills */}
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => { setRoleFilter(""); setOffset(0); load(0, "", query); }}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                roleFilter === "" ? "bg-accent text-white" : "bg-muted text-subtle hover:text-text"
+              }`}
+            >
+              Все
+            </button>
+            {ROLES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => { setRoleFilter(r); setOffset(0); load(0, r, query); }}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  roleFilter === r
+                    ? roleBadge[r].replace("border ", "")
+                    : "bg-muted text-subtle hover:text-text"
+                }`}
+              >
+                {roleLabel(r) || r}
+              </button>
+            ))}
+          </div>
+
           {loading ? (
-            <p className="text-subtle">Загрузка…</p>
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-14 rounded-lg bg-muted/50 animate-pulse" />
+              ))}
+            </div>
           ) : items.length === 0 ? (
-            <p className="text-subtle">Никого не найдено.</p>
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/60">
+                <IconUser size={24} className="text-subtle" />
+              </div>
+              <p className="text-subtle">Никого не найдено.</p>
+            </div>
           ) : (
             <>
               {/* Mobile cards */}
@@ -161,20 +231,25 @@ export default function UsersPage() {
                 {items.map((u) => (
                   <li
                     key={u.id}
-                    className="rounded-lg border border-border bg-muted/40 p-3"
+                    className="rounded-lg border border-border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium text-text">
-                          {u.full_name || `MAX#${u.max_user_id}`}
-                        </div>
-                        <div className="mt-0.5 font-mono text-xs text-subtle">
-                          {u.phone_masked || u.email_masked || "—"}
-                        </div>
-                        <div className="mt-1 text-xs text-subtle">
-                          c {fmtDate(u.created_at)}
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-subtle">
+                            {(u.full_name || `M${u.max_user_id}`).slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-text">
+                              {u.full_name || `MAX#${u.max_user_id}`}
+                            </div>
+                            <div className="font-mono text-xs text-subtle truncate">
+                              {u.phone_masked || u.email_masked || "—"}
+                            </div>
+                          </div>
                         </div>
                       </div>
+                      <RolePill role={u.role} />
                     </div>
                     <div className="mt-3">
                       <RoleSelect
@@ -183,10 +258,11 @@ export default function UsersPage() {
                         onChange={(r) => setUserRole(u, r)}
                       />
                       {isMyself(u.id) && (
-                        <p className="mt-1 text-xs text-subtle">
-                          (вы сами; смена недоступна)
-                        </p>
+                        <p className="mt-1 text-xs text-subtle">(вы сами — смена недоступна)</p>
                       )}
+                    </div>
+                    <div className="mt-2 text-xs text-subtle">
+                      c {fmtDate(u.created_at)} · ID: {u.max_user_id}
                     </div>
                   </li>
                 ))}
@@ -196,42 +272,53 @@ export default function UsersPage() {
               <div className="hidden overflow-x-auto md:block">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="border-b border-border text-subtle">
-                      <th className="py-2 pr-3 font-medium">ID</th>
-                      <th className="py-2 pr-3 font-medium">ФИО</th>
-                      <th className="py-2 pr-3 font-medium">Контакт</th>
-                      <th className="py-2 pr-3 font-medium">Роль</th>
-                      <th className="py-2 pr-3 font-medium">MAX id</th>
-                      <th className="py-2 font-medium">Создан</th>
+                    <tr className="border-b border-border">
+                      <th className="pb-2 pr-3 text-xs font-medium uppercase tracking-wide text-subtle">Пользователь</th>
+                      <th className="pb-2 pr-3 text-xs font-medium uppercase tracking-wide text-subtle">Контакт</th>
+                      <th className="pb-2 pr-3 text-xs font-medium uppercase tracking-wide text-subtle">Роль</th>
+                      <th className="pb-2 pr-3 text-xs font-medium uppercase tracking-wide text-subtle">MAX ID</th>
+                      <th className="pb-2 text-xs font-medium uppercase tracking-wide text-subtle">Создан</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((u) => (
                       <tr
                         key={u.id}
-                        className="border-b border-border/60 last:border-b-0"
+                        className={`border-b border-border/40 last:border-b-0 transition-colors ${
+                          isMyself(u.id) ? "bg-accent/5" : "hover:bg-muted/30"
+                        }`}
                       >
-                        <td className="py-2 pr-3 font-mono text-xs">{u.id}</td>
-                        <td className="py-2 pr-3">{u.full_name || "—"}</td>
-                        <td className="py-2 pr-3 font-mono text-xs">
+                        <td className="py-2.5 pr-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-subtle">
+                              {(u.full_name || `M${u.max_user_id}`).slice(0, 1).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-medium text-text">
+                                {u.full_name || "—"}
+                              </div>
+                              {isMyself(u.id) && (
+                                <div className="text-xs text-accent">вы</div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-2.5 pr-3 font-mono text-xs text-subtle">
                           {u.phone_masked || u.email_masked || "—"}
                         </td>
-                        <td className="py-2 pr-3">
-                          <RoleSelect
-                            value={u.role}
-                            disabled={savingID === u.id || isMyself(u.id)}
-                            onChange={(r) => setUserRole(u, r)}
-                          />
-                          {isMyself(u.id) && (
-                            <div className="mt-0.5 text-xs text-subtle">
-                              (вы сами)
-                            </div>
-                          )}
+                        <td className="py-2.5 pr-3">
+                          <div className="flex flex-col gap-1">
+                            <RoleSelect
+                              value={u.role}
+                              disabled={savingID === u.id || isMyself(u.id)}
+                              onChange={(r) => setUserRole(u, r)}
+                            />
+                          </div>
                         </td>
-                        <td className="py-2 pr-3 font-mono text-xs">
+                        <td className="py-2.5 pr-3 font-mono text-xs text-subtle">
                           {u.max_user_id}
                         </td>
-                        <td className="py-2 text-xs text-subtle">
+                        <td className="py-2.5 text-xs text-subtle">
                           {fmtDate(u.created_at)}
                         </td>
                       </tr>
@@ -242,7 +329,8 @@ export default function UsersPage() {
             </>
           )}
 
-          <div className="mt-4 flex items-center justify-between">
+          {/* Pagination */}
+          <div className="mt-5 flex items-center justify-between border-t border-border/60 pt-4">
             <Button
               variant="secondary"
               disabled={offset === 0 || loading}
@@ -251,8 +339,10 @@ export default function UsersPage() {
                 setOffset(o);
                 load(o, roleFilter, query);
               }}
+              className="gap-1.5"
             >
-              ← Назад
+              <IconArrowLeft size={14} />
+              Назад
             </Button>
             <span className="text-xs text-subtle">
               {items.length === 0
@@ -268,8 +358,10 @@ export default function UsersPage() {
                 setOffset(o);
                 load(o, roleFilter, query);
               }}
+              className="gap-1.5"
             >
-              Вперёд →
+              Вперёд
+              <IconArrowRight size={14} />
             </Button>
           </div>
         </CardBody>
@@ -292,7 +384,11 @@ function RoleSelect({
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as Role)}
-      className="rounded-md border border-border bg-muted/70 px-2.5 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50"
+      className={`rounded-md border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-accent/30 transition-colors ${
+        disabled
+          ? "cursor-not-allowed border-border bg-muted/30 text-subtle opacity-60"
+          : `border-border bg-muted/70 text-text hover:bg-muted ${roleBadge[value]}`
+      }`}
     >
       {ROLES.map((r) => (
         <option key={r} value={r}>

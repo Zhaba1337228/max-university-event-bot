@@ -7,8 +7,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-maxbot}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # БЕЗОПАСНОСТЬ: порт 5432 НЕ пробрасывается на хост.
+    # БД доступна только изнутри Docker-сети (bot:postgres:5432).
+    # Для локального доступа к БД используй:
+    #   docker compose exec postgres psql -U app maxbot
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-maxbot}"]
       interval: 5s

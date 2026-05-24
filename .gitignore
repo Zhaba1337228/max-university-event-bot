@@ -8,10 +8,12 @@
 # Logs
 *.log
 
-# Env
+# Env — реальные секреты никогда не коммитим
 .env
 .env.local
 .env.*.local
+.env.prod          # production secrets
+deployments/.env.prod  # алиас
 
 # Coverage
 *.coverprofile

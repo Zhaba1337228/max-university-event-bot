@@ -10,6 +10,7 @@
     min-height: 100vh;
     -webkit-text-size-adjust: 100%;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -27,6 +28,21 @@
     outline: 2px solid #7c5cff;
     outline-offset: 2px;
     border-radius: 6px;
+  }
+  /* Scrollbar styling for webkit */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0b0d12;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a3346;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a4560;
   }
 }
 
@@ -51,10 +67,94 @@
 }
 
 @layer utilities {
-  /* Адаптивная типографика для заголовков (необязательная — не везде применяем). */
+  /* Адаптивная типографика для заголовков */
   .text-heading {
     font-weight: 600;
     line-height: 1.2;
     letter-spacing: -0.01em;
   }
+
+  /* Gradient text utility */
+  .text-gradient {
+    background: linear-gradient(135deg, #b9a8ff 0%, #7c5cff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Subtle glow for accent elements */
+  .glow-accent {
+    box-shadow: 0 0 20px rgba(124, 92, 255, 0.3);
+  }
+
+  /* Role-specific accent colors */
+  .role-admin {
+    --role-color: #7c5cff;
+    --role-bg: rgba(124, 92, 255, 0.12);
+  }
+  .role-organizer {
+    --role-color: #3b82f6;
+    --role-bg: rgba(59, 130, 246, 0.12);
+  }
+  .role-staff {
+    --role-color: #10b981;
+    --role-bg: rgba(16, 185, 129, 0.12);
+  }
+  .role-applicant {
+    --role-color: #a1aac0;
+    --role-bg: rgba(161, 170, 192, 0.12);
+  }
+}
+
+/* Animation keyframes — used by custom animate-in classes */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInFromTop {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInFromBottom {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+.fade-in {
+  animation-name: fadeIn;
+}
+.slide-in-from-top-2 {
+  animation-name: slideInFromTop;
+}
+.slide-in-from-bottom-2 {
+  animation-name: slideInFromBottom;
+}
+.scale-in {
+  animation-name: scaleIn;
+}
+.duration-200 {
+  animation-duration: 200ms;
+}
+.duration-300 {
+  animation-duration: 300ms;
+}
+
+/* Page enter animation */
+.page-enter {
+  animation: slideInFromBottom 0.25s ease-out both;
 }

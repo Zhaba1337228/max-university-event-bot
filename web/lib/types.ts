@@ -72,6 +72,61 @@ export function canEditEvent(role: Role, meID: number, createdBy?: number): bool
   return typeof createdBy === "number" && createdBy === meID;
 }
 
+// canManageRegistrations — может ли пользователь управлять записями
+// (смотреть участников, ставить вручную attended/no_show).
+// Для конкретного события нужна дополнительная проверка canEditEvent.
+export function canManageRegistrations(role: Role): boolean {
+  return role === "admin" || role === "organizer";
+}
+
+// canBroadcast — может ли пользователь делать рассылку участникам.
+// Для конкретного события нужна дополнительная проверка canEditEvent.
+export function canBroadcast(role: Role): boolean {
+  return role === "admin" || role === "organizer";
+}
+
+// canViewAudit — может ли пользователь читать журнал действий.
+export function canViewAudit(role: Role): boolean {
+  return role === "admin" || role === "organizer";
+}
+
+// canUnmaskPII — может ли пользователь раскрыть полные ФИО/контакты участника.
+// Только admin — у организатора данные маскируются для защиты ПДн.
+export function canUnmaskPII(role: Role): boolean {
+  return role === "admin";
+}
+
+// canManageUsers — может ли пользователь управлять ролями других пользователей.
+export function canManageUsers(role: Role): boolean {
+  return role === "admin";
+}
+
+// RBAC матрица ответственностей по ролям (используется в /roles странице).
+export type RoleCapability = {
+  key: string;
+  label: string;
+  admin: boolean;
+  organizer: boolean | "own"; // "own" = только для своих мероприятий
+  staff: boolean;
+  applicant: boolean;
+};
+
+export const ROLE_CAPABILITIES: RoleCapability[] = [
+  { key: "dashboard",       label: "Дашборд и статистика",           admin: true,  organizer: true,  staff: false, applicant: false },
+  { key: "events_list",     label: "Список мероприятий",              admin: true,  organizer: true,  staff: false, applicant: false },
+  { key: "events_create",   label: "Создание мероприятий",            admin: true,  organizer: true,  staff: false, applicant: false },
+  { key: "events_edit",     label: "Редактирование мероприятий",      admin: true,  organizer: "own", staff: false, applicant: false },
+  { key: "events_toggle",   label: "Открыть / закрыть регистрацию",   admin: true,  organizer: "own", staff: false, applicant: false },
+  { key: "participants",    label: "Просмотр участников",             admin: true,  organizer: "own", staff: false, applicant: false },
+  { key: "mark_attended",   label: "Ручная отметка посещения",        admin: true,  organizer: "own", staff: false, applicant: false },
+  { key: "broadcast",       label: "Рассылка уведомлений",            admin: true,  organizer: "own", staff: false, applicant: false },
+  { key: "export_csv",      label: "Экспорт CSV участников",          admin: true,  organizer: "own", staff: false, applicant: false },
+  { key: "audit_log",       label: "Журнал действий",                 admin: true,  organizer: "own", staff: false, applicant: false },
+  { key: "unmask_pii",      label: "Раскрытие ФИО / контактов (ПДн)", admin: true,  organizer: false, staff: false, applicant: false },
+  { key: "checkin_qr",      label: "QR-сканер check-in на входе",     admin: true,  organizer: false, staff: true,  applicant: false },
+  { key: "manage_users",    label: "Управление ролями пользователей",  admin: true,  organizer: false, staff: false, applicant: false },
+];
+
 export type EventStats = {
   capacity: number;
   registered: number;
