@@ -54,7 +54,6 @@ func (h *StartHandler) OnStart(ctx context.Context, upd *schemes.MessageCreatedU
 }
 
 // OnWhoami — команда /whoami. Показывает MAX user_id отправителя.
-// Нужно, чтобы организатор мог быстро добавить себя в ADMIN_USER_IDS / ORGANIZER_USER_IDS.
 func (h *StartHandler) OnWhoami(ctx context.Context, upd *schemes.MessageCreatedUpdate) {
 	chatID := upd.Message.Recipient.ChatId
 	userID := upd.Message.Sender.UserId
@@ -68,8 +67,6 @@ func (h *StartHandler) OnWhoami(ctx context.Context, upd *schemes.MessageCreated
 	if username != "" {
 		text += fmt.Sprintf("Username: @%s\n", username)
 	}
-	text += "\nЧтобы получить доступ к админке — попроси администратора добавить этот ID в роли organizer/admin."
-
 	if err := h.api.SendText(ctx, chatID, text); err != nil {
 		h.log.Error("send whoami failed", "err", err, "chat_id", chatID)
 	}
