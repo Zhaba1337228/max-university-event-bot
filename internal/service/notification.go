@@ -122,6 +122,11 @@ func (s *notificationService) SendBroadcast(ctx context.Context, eventID int64, 
 		default:
 		}
 
+		// TZ §6: пользователь мог отключить уведомления по этому мероприятию.
+		if r.NotificationsDisabled {
+			continue
+		}
+
 		// Создаём запись в notifications (с дедупом на (user, event, type, minute)).
 		notif := &domain.Notification{
 			EventID:     ev.ID,

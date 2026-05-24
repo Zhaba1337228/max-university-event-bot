@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { api, HttpError } from "@/lib/api";
-import { CheckinResp } from "@/lib/types";
+import { CheckinResp, LookupByCodeResp } from "@/lib/types";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,11 @@ export default function CheckinPage() {
   const [manual, setManual] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
+  // Поиск по короткому коду записи (не QR-payload)
+  const [shortCode, setShortCode] = useState("");
+  const [lookupResult, setLookupResult] = useState<LookupByCodeResp | null>(null);
+  const [lookupErr, setLookupErr] = useState<string | null>(null);
+  const [lookupBusy, setLookupBusy] = useState(false);
   // anti-flood: один и тот же QR в пределах 3 секунд игнорируем
   const lastScanRef = useRef<{ code: string; at: number } | null>(null);
   // Поток, который мы поднимаем для запроса разрешения. После клика
@@ -241,6 +246,94 @@ export default function CheckinPage() {
             (зашифрованный) и старый{" "}
             <span className="font-mono">MAXUEB:&lt;event&gt;:&lt;code&gt;</span>.
           </p>
+        </CardBody>
+      </Card>
+
+      {/* Поиск по короткому коду записи */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Найти по коду записи</CardTitle>
+        </CardHeader>
+        <CardBody>
+          <p className="mb-3 text-sm text-subtle">
+            Введите короткий код записи (например{" "}
+            <span className="font-mono text-text">a1b2c3d4</span>) — бот показывает
+            его участнику после регистрации. Запись будет найдена без отметки
+            «пришёл».
+          </p>
+          <form
+            className="flex flex-col gap-2 sm:flex-row"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const c = shortCode.trim();
+              if (!c) return;
+              setLookupBusy(true);
+              setLookupErr(null);
+              setLookupResult(null);
+              api
+                .get<LookupByCodeResp>(`/api/registrations/by-code?code=${encodeURIComponent(c)}`)
+                .then((d) => setLookupResult(d))
+                .catch((err) => {
+                  setLookupErr(
+                    err instanceof HttpError && err.status === 404
+                      ? "Запись с таким кодом не найдена."
+                      : err instanceof HttpError && err.body?.message
+                        ? err.body.message
+                        : "Ошибка поиска",
+                  );
+                })
+                .finally(() => setLookupBusy(false));
+            }}
+          >
+            <Input
+              placeholder="a1b2c3d4..."
+              value={shortCode}
+              onChange={(e) => setShortCode(e.target.value)}
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <Button
+              type="submit"
+              disabled={lookupBusy || !shortCode.trim()}
+              className="sm:w-auto"
+            >
+              {lookupBusy ? "Ищем…" : "Найти"}
+            </Button>
+          </form>
+
+          {lookupErr && (
+            <p className="mt-2 text-sm text-danger">{lookupErr}</p>
+          )}
+
+          {lookupResult && (
+            <div className="mt-4 space-y-1 rounded-lg border border-border bg-muted/40 p-3 text-sm">
+              <div>
+                <span className="text-subtle">Мероприятие:</span>{" "}
+                {lookupResult.event?.title ?? "—"}
+              </div>
+              <div>
+                <span className="text-subtle">Участник:</span>{" "}
+                {lookupResult.registration.full_name_masked}
+              </div>
+              <div>
+                <span className="text-subtle">Статус:</span>{" "}
+                {lookupResult.registration.status}
+              </div>
+              {lookupResult.registration.registered_at && (
+                <div>
+                  <span className="text-subtle">Записан:</span>{" "}
+                  {new Date(lookupResult.registration.registered_at).toLocaleString("ru-RU")}
+                </div>
+              )}
+              {lookupResult.registration.checkin_at && (
+                <div>
+                  <span className="text-subtle">Отмечен:</span>{" "}
+                  {new Date(lookupResult.registration.checkin_at).toLocaleString("ru-RU")}
+                </div>
+              )}
+            </div>
+          )}
         </CardBody>
       </Card>
 

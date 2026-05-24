@@ -12,33 +12,41 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/messages"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/repo"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 )
 
 // MyRegistrationHandler — обработчик «Моя запись», /forget_me и истории.
 type MyRegistrationHandler struct {
-	api    *maxclient.Client
-	fsm    *fsm.Manager
-	users  service.User
-	reg    service.Registration
-	events service.Event
-	logs   service.ActionLog
-	log    *slog.Logger
+	api      *maxclient.Client
+	fsm      *fsm.Manager
+	users    service.User
+	reg      service.Registration
+	events   service.Event
+	logs     service.ActionLog
+	regsRepo repo.RegistrationRepo
+	db       repo.Querier
+	log      *slog.Logger
 }
 
 // NewMyRegistrationHandler — конструктор.
+// regsRepo и db опциональны (могут быть nil); без них toggle уведомлений не работает.
 func NewMyRegistrationHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
 	users service.User, reg service.Registration, events service.Event,
-	logs service.ActionLog, log *slog.Logger,
+	logs service.ActionLog,
+	regsRepo repo.RegistrationRepo, db repo.Querier,
+	log *slog.Logger,
 ) *MyRegistrationHandler {
 	return &MyRegistrationHandler{
-		api:    api,
-		fsm:    fsmMgr,
-		users:  users,
-		reg:    reg,
-		events: events,
-		logs:   logs,
-		log:    log.With("handler", "my_registration"),
+		api:      api,
+		fsm:      fsmMgr,
+		users:    users,
+		reg:      reg,
+		events:   events,
+		logs:     logs,
+		regsRepo: regsRepo,
+		db:       db,
+		log:      log.With("handler", "my_registration"),
 	}
 }
 
@@ -73,6 +81,9 @@ func (h *MyRegistrationHandler) OnCallback(ctx context.Context, upd *schemes.Mes
 		h.onForgetNo(ctx, chatID, userMaxID)
 	case "history":
 		h.onHistory(ctx, chatID, userMaxID)
+	case "toggle_notif":
+		regID := p.ArgInt64(0)
+		h.onToggleNotif(ctx, chatID, userMaxID, regID)
 	case "qr":
 		// День 15.
 		h.sendText(ctx, chatID, messages.QRNotAvailable())
@@ -128,10 +139,58 @@ func (h *MyRegistrationHandler) onShow(ctx context.Context, chatID, userMaxID in
 			continue
 		}
 		text := messages.MyRegistration(ev, r)
-		kb := keyboards.MyRegistration(r.ID)
+		kb := keyboards.MyRegistration(r.ID, r.NotificationsDisabled)
 		if err := h.api.SendTextWithKeyboard(ctx, chatID, text, kb); err != nil {
 			h.log.Error("send my reg failed", "err", err)
 		}
+	}
+}
+
+// onToggleNotif — переключает флаг notifications_disabled для регистрации (TZ §6).
+func (h *MyRegistrationHandler) onToggleNotif(ctx context.Context, chatID, userMaxID, regID int64) {
+	if regID <= 0 {
+		h.sendFallback(ctx, chatID)
+		return
+	}
+	if h.regsRepo == nil || h.db == nil {
+		h.sendText(ctx, chatID, "Управление уведомлениями временно недоступно.")
+		return
+	}
+
+	// Проверяем, что запись принадлежит этому пользователю.
+	u, err := h.users.GetByMaxID(ctx, userMaxID)
+	if err != nil || u == nil {
+		h.sendError(ctx, chatID)
+		return
+	}
+	regs, err := h.reg.ListActiveByUser(ctx, u.ID)
+	if err != nil {
+		h.sendError(ctx, chatID)
+		return
+	}
+	var targetReg *domain.Registration
+	for _, r := range regs {
+		if r.ID == regID {
+			targetReg = r
+			break
+		}
+	}
+	if targetReg == nil {
+		h.sendFallback(ctx, chatID)
+		return
+	}
+
+	newDisabled := !targetReg.NotificationsDisabled
+	if err := h.regsRepo.SetNotificationsDisabled(ctx, h.db, regID, newDisabled); err != nil {
+		h.log.Error("toggle notif failed", "err", err, "reg_id", regID)
+		h.sendError(ctx, chatID)
+		return
+	}
+
+	if newDisabled {
+		h.sendText(ctx, chatID, messages.NotifDisabledDone())
+	} else {
+		h.sendText(ctx, chatID, messages.NotifEnabledDone())
 	}
 }
 

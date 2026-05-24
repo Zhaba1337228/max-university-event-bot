@@ -150,6 +150,9 @@ func (s *Server) routes() http.Handler {
 		r.Post("/events/{id}/broadcast", s.handleBroadcast)
 		r.Post("/events/{id}/registrations/{regID}/mark", s.handleManualMark)
 
+		// Registration lookup by short code (без отметки attended).
+		r.Get("/registrations/by-code", s.handleLookupByCode)
+
 		// Check-in (камера телефона организатора).
 		r.Post("/checkin", s.handleCheckin)
 

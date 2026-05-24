@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -276,6 +277,16 @@ func (s *registrationService) Cancel(ctx context.Context, regID int64, by Cancel
 			newStatus = domain.RegStatusCancelledByOrganizer
 			actionType = domain.ActionRegistrationCancelledOrg
 		}
+
+		// TZ §5: если мероприятие уже началось, проверяем политику поздней отмены.
+		if by == CancelByUser && ev.StartsAt.Before(time.Now()) {
+			if !ev.LateCancelAllowed {
+				return ErrLateCancelForbidden
+			}
+			// Поздняя отмена разрешена — фиксируем особым статусом.
+			newStatus = domain.RegStatusLateCancel
+		}
+
 		if err := s.regs.UpdateStatus(ctx, tx, reg.ID, newStatus); err != nil {
 			return fmt.Errorf("update status: %w", err)
 		}

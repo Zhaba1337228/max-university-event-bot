@@ -22,6 +22,7 @@ var (
 	ErrNotRegistered       = errors.New("user has no active registration")
 	ErrCheckinWindowClosed = errors.New("check-in window closed")
 	ErrAlreadyCheckedIn    = errors.New("already checked in")
+	ErrLateCancelForbidden = errors.New("cancellation after event start is not allowed for this event")
 )
 
 // Профили / валидация ввода.

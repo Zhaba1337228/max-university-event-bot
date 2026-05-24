@@ -185,15 +185,16 @@ func (s *Server) handleListParticipants(w http.ResponseWriter, r *http.Request) 
 // Принимаем только то, что разрешено редактировать админкой. cancelled/finished
 // — внутренние статусы, через эту форму проставить нельзя.
 type eventInputDTO struct {
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	StartsAt    string   `json:"starts_at"`         // RFC3339
-	EndsAt      string   `json:"ends_at,omitempty"` // RFC3339, optional
-	Location    string   `json:"location"`
-	Format      string   `json:"format"` // offline|online|hybrid
-	Capacity    int      `json:"capacity"`
-	Status      string   `json:"status,omitempty"` // open|closed (только для update)
-	Tags        []string `json:"tags"`
+	Title             string   `json:"title"`
+	Description       string   `json:"description"`
+	StartsAt          string   `json:"starts_at"`         // RFC3339
+	EndsAt            string   `json:"ends_at,omitempty"` // RFC3339, optional
+	Location          string   `json:"location"`
+	Format            string   `json:"format"` // offline|online|hybrid
+	Capacity          int      `json:"capacity"`
+	Status            string   `json:"status,omitempty"` // open|closed (только для update)
+	Tags              []string `json:"tags"`
+	LateCancelAllowed bool     `json:"late_cancel_allowed,omitempty"` // TZ §5
 }
 
 // parseEventInput валидирует и переводит DTO в service.EventInput.
@@ -205,12 +206,13 @@ func parseEventInput(body io.ReadCloser, allowStatus bool) (service.EventInput, 
 		return service.EventInput{}, fmt.Errorf("bad_body: %w", err)
 	}
 	in := service.EventInput{
-		Title:       dto.Title,
-		Description: dto.Description,
-		Location:    dto.Location,
-		Format:      domain.EventFormat(dto.Format),
-		Capacity:    dto.Capacity,
-		Tags:        dto.Tags,
+		Title:             dto.Title,
+		Description:       dto.Description,
+		Location:          dto.Location,
+		Format:            domain.EventFormat(dto.Format),
+		Capacity:          dto.Capacity,
+		Tags:              dto.Tags,
+		LateCancelAllowed: dto.LateCancelAllowed,
 	}
 	startsAt, err := time.Parse(time.RFC3339, dto.StartsAt)
 	if err != nil {
@@ -370,6 +372,38 @@ func (s *Server) handleBroadcast(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"sent": sent})
 }
 
+// --- REGISTRATION LOOKUP ---
+
+// handleLookupByCode — GET /api/registrations/by-code?code=<attendance_code>.
+// Позволяет организатору и staff быстро найти запись по коду (без сканирования QR).
+// Не отмечает участника пришедшим — только возвращает данные.
+func (s *Server) handleLookupByCode(w http.ResponseWriter, r *http.Request) {
+	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	if code == "" {
+		writeJSON(w, http.StatusBadRequest, errResp("missing_code", "Параметр code обязателен"))
+		return
+	}
+
+	reg, err := s.deps.RegsRepo.GetByCode(r.Context(), s.deps.DB, code)
+	if err != nil {
+		s.log.Error("lookup by code failed", "err", err)
+		writeJSON(w, http.StatusInternalServerError, errResp("db", "Ошибка чтения"))
+		return
+	}
+	if reg == nil {
+		writeJSON(w, http.StatusNotFound, errResp("not_found", "Запись с таким кодом не найдена"))
+		return
+	}
+
+	// Подгружаем событие для контекста.
+	ev, _ := s.deps.Events.Get(r.Context(), reg.EventID)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"registration": registrationToDTO(reg, false),
+		"event":        eventToDTO(ev),
+	})
+}
+
 // --- CHECK-IN (День 15) ---
 
 // handleCheckin — POST /api/checkin { "qr": "MAXUEB:<eventID>:<code>" }.
@@ -517,15 +551,16 @@ func eventToDTO(e *domain.Event) map[string]any {
 		return nil
 	}
 	dto := map[string]any{
-		"id":          e.ID,
-		"title":       e.Title,
-		"description": e.Description,
-		"starts_at":   e.StartsAt.UTC().Format(time.RFC3339),
-		"location":    e.Location,
-		"format":      string(e.Format),
-		"capacity":    e.Capacity,
-		"status":      string(e.Status),
-		"tags":        e.Tags,
+		"id":                  e.ID,
+		"title":               e.Title,
+		"description":         e.Description,
+		"starts_at":           e.StartsAt.UTC().Format(time.RFC3339),
+		"location":            e.Location,
+		"format":              string(e.Format),
+		"capacity":            e.Capacity,
+		"status":              string(e.Status),
+		"tags":                e.Tags,
+		"late_cancel_allowed": e.LateCancelAllowed,
 	}
 	if e.EndsAt != nil {
 		dto["ends_at"] = e.EndsAt.UTC().Format(time.RFC3339)

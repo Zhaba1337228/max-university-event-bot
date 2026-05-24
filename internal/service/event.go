@@ -17,15 +17,16 @@ import (
 // EndsAt и Tags опциональны; Status разрешён только open|closed (cancelled и
 // finished — внутренние, проставляются переходами).
 type EventInput struct {
-	Title       string
-	Description string
-	StartsAt    time.Time
-	EndsAt      *time.Time
-	Location    string
-	Format      domain.EventFormat
-	Capacity    int
-	Status      domain.EventStatus // только для Update; в Create игнорируется (всегда open)
-	Tags        []string
+	Title             string
+	Description       string
+	StartsAt          time.Time
+	EndsAt            *time.Time
+	Location          string
+	Format            domain.EventFormat
+	Capacity          int
+	Status            domain.EventStatus // только для Update; в Create игнорируется (всегда open)
+	Tags              []string
+	LateCancelAllowed bool // TZ §5: разрешить ли позднюю отмену записи
 }
 
 // EventWithFree — событие плюс число свободных мест.
@@ -208,6 +209,7 @@ func (s *eventService) Update(ctx context.Context, organizerID int64, eventID in
 	existing.Format = up.Format
 	existing.Capacity = up.Capacity
 	existing.Tags = up.Tags
+	existing.LateCancelAllowed = up.LateCancelAllowed
 	if up.Status != "" {
 		existing.Status = up.Status
 	}
@@ -275,15 +277,16 @@ func buildEventFromInput(in EventInput, now time.Time, isCreate bool) (*domain.E
 		location = location[:512]
 	}
 	return &domain.Event{
-		Title:       title,
-		Description: descr,
-		StartsAt:    in.StartsAt,
-		EndsAt:      in.EndsAt,
-		Location:    location,
-		Format:      format,
-		Capacity:    in.Capacity,
-		Status:      status,
-		Tags:        tags,
+		Title:             title,
+		Description:       descr,
+		StartsAt:          in.StartsAt,
+		EndsAt:            in.EndsAt,
+		Location:          location,
+		Format:            format,
+		Capacity:          in.Capacity,
+		Status:            status,
+		Tags:              tags,
+		LateCancelAllowed: in.LateCancelAllowed,
 	}, nil
 }
 

@@ -195,7 +195,7 @@ func TestNoEmojiInWelcome(t *testing.T) {
 		messages.Help(),
 		messages.AskFullName(),
 		messages.AskContact(),
-		messages.RegSuccess(&domain.Event{Title: "T", StartsAt: time.Now(), Location: "X"}),
+		messages.RegSuccess(&domain.Event{Title: "T", StartsAt: time.Now(), Location: "X"}, ""),
 		messages.ConsentAsk("v1"),
 		messages.ForgetMeAsk(),
 		messages.OrganizerNoAccess(),

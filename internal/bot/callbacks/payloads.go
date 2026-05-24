@@ -109,6 +109,9 @@ func EventListPage(offset int) string { return build(GroupEvent, "list", itoa(of
 // EventShow — открыть карточку события.
 func EventShow(id int64) string { return build(GroupEvent, "show", i64(id)) }
 
+// EventDetails — показать расширенную информацию (кнопка «Подробнее»).
+func EventDetails(id int64) string { return build(GroupEvent, "details", i64(id)) }
+
 // --- Регистрация ---
 
 // RegStart — начать запись на событие eventID.
@@ -139,6 +142,9 @@ func MyHistory() string { return build(GroupMy, "history") }
 
 // MyShowQR — повторно показать QR-код существующей регистрации (День 15).
 func MyShowQR(regID int64) string { return build(GroupMy, "qr", i64(regID)) }
+
+// MyToggleNotif — включить/выключить уведомления по конкретной записи.
+func MyToggleNotif(regID int64) string { return build(GroupMy, "toggle_notif", i64(regID)) }
 
 // ForgetMeAsk — двухшаговое подтверждение /forget_me.
 func ForgetMeAsk() string { return build(GroupMy, "forget_ask") }
@@ -195,6 +201,9 @@ func OrgListParticipants(eventID int64, offset int) string {
 // OrgListExport — экспорт участников в CSV.
 func OrgListExport(eventID int64) string { return build(GroupOrgList, "csv", i64(eventID)) }
 
+// OrgListSearchCode — начать поиск участника по коду записи.
+func OrgListSearchCode(eventID int64) string { return build(GroupOrgList, "search_code", i64(eventID)) }
+
 // OrgNotifStart — начало рассылки по eventID.
 func OrgNotifStart(eventID int64) string { return build(GroupOrgNotif, "start", i64(eventID)) }
 
@@ -212,6 +221,12 @@ func OrgCloseAsk(eventID int64) string { return build(GroupOrgClose, "ask", i64(
 
 // OrgCloseYes — подтвердить закрытие.
 func OrgCloseYes(eventID int64) string { return build(GroupOrgClose, "yes", i64(eventID)) }
+
+// OrgOpenAsk — открыть регистрацию снова.
+func OrgOpenAsk(eventID int64) string { return build(GroupOrgClose, "open_ask", i64(eventID)) }
+
+// OrgOpenYes — подтвердить открытие.
+func OrgOpenYes(eventID int64) string { return build(GroupOrgClose, "open_yes", i64(eventID)) }
 
 // --- Admin ---
 

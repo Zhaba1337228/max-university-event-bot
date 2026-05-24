@@ -25,12 +25,15 @@ func OrganizerEventActions(eventID int64, status domain.EventStatus) *maxbot.Key
 	kb := newKB()
 	kb.AddRow().
 		AddCallback("Участники", schemes.DEFAULT, callbacks.OrgListParticipants(eventID, 0)).
-		AddCallback("Экспорт CSV", schemes.DEFAULT, callbacks.OrgListExport(eventID))
+		AddCallback("Найти по коду", schemes.DEFAULT, callbacks.OrgListSearchCode(eventID))
 	kb.AddRow().
-		AddCallback("Рассылка", schemes.DEFAULT, callbacks.OrgNotifStart(eventID)).
-		AddCallback("AI-сводка", schemes.DEFAULT, callbacks.OrgAISummary(eventID))
+		AddCallback("Экспорт CSV", schemes.DEFAULT, callbacks.OrgListExport(eventID)).
+		AddCallback("Рассылка", schemes.DEFAULT, callbacks.OrgNotifStart(eventID))
+	kb.AddRow().AddCallback("AI-сводка", schemes.DEFAULT, callbacks.OrgAISummary(eventID))
 	if status == domain.EventStatusOpen {
 		kb.AddRow().AddCallback("Закрыть регистрацию", schemes.NEGATIVE, callbacks.OrgCloseAsk(eventID))
+	} else if status == domain.EventStatusClosed {
+		kb.AddRow().AddCallback("Открыть регистрацию", schemes.POSITIVE, callbacks.OrgOpenAsk(eventID))
 	}
 	kb.AddRow().AddCallback("К списку мероприятий", schemes.DEFAULT, callbacks.OrgEntry())
 	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
@@ -70,4 +73,20 @@ func OrganizerCloseConfirm(eventID int64) *maxbot.Keyboard {
 		"Да, закрыть", callbacks.OrgCloseYes(eventID),
 		"Отмена", callbacks.OrgEntry(),
 	)
+}
+
+// OrganizerOpenConfirm — подтверждение открытия регистрации.
+func OrganizerOpenConfirm(eventID int64) *maxbot.Keyboard {
+	return YesNo(
+		"Да, открыть", callbacks.OrgOpenYes(eventID),
+		"Отмена", callbacks.OrgEntry(),
+	)
+}
+
+// OrganizerParticipantsBack — кнопка «назад к карточке мероприятия» из поиска.
+func OrganizerParticipantsBack(eventID int64) *maxbot.Keyboard {
+	kb := newKB()
+	kb.AddRow().AddCallback("К карточке мероприятия", schemes.DEFAULT, callbacks.OrgStats(eventID))
+	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
+	return kb
 }

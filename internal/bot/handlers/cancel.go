@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/max-messenger/max-bot-api-client-go/schemes"
 
@@ -129,10 +130,21 @@ func (h *CancelHandler) onYes(ctx context.Context, chatID, userMaxID, regID int6
 		return
 	}
 
+	ev, err := h.events.Get(ctx, reg.EventID)
+	if err != nil {
+		h.log.Error("cancel yes: get event failed", "err", err)
+		h.sendError(ctx, chatID)
+		return
+	}
+
 	_, err = h.reg.Cancel(ctx, regID, service.CancelByUser)
 	switch {
 	case errors.Is(err, service.ErrNotRegistered):
 		h.sendText(ctx, chatID, messages.MyRegistrationEmpty())
+		_ = h.fsm.Reset(ctx, userMaxID)
+		return
+	case errors.Is(err, service.ErrLateCancelForbidden):
+		h.sendText(ctx, chatID, messages.CancelLateForbidden())
 		_ = h.fsm.Reset(ctx, userMaxID)
 		return
 	case err != nil:
@@ -142,7 +154,14 @@ func (h *CancelHandler) onYes(ctx context.Context, chatID, userMaxID, regID int6
 	}
 
 	_ = h.fsm.Reset(ctx, userMaxID)
-	if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.CancelDone(), keyboards.MainMenu()); err != nil {
+	// Поздняя отмена (мероприятие уже началось) — показываем особое сообщение.
+	var cancelMsg string
+	if ev != nil && ev.StartsAt.Before(nowTime()) {
+		cancelMsg = messages.CancelLate()
+	} else {
+		cancelMsg = messages.CancelDone()
+	}
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, cancelMsg, keyboards.AfterCancel()); err != nil {
 		h.log.Error("send cancel done failed", "err", err)
 	}
 }
@@ -197,3 +216,6 @@ func (h *CancelHandler) sendError(ctx context.Context, chatID int64) {
 		h.log.Error("send error msg failed", "err", err)
 	}
 }
+
+// nowTime — обёртка над time.Now для testability (в будущем).
+func nowTime() time.Time { return time.Now() }

@@ -11,7 +11,9 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/fsm"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/keyboards"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/messages"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/repo"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 )
 
@@ -22,26 +24,31 @@ import (
 // см. план §19.4 (RBAC). Если проверка не прошла → OrganizerNoAccess
 // + main menu без раскрытия деталей.
 type OrganizerHandler struct {
-	api    *maxclient.Client
-	fsm    *fsm.Manager
-	role   service.Role
-	events service.Event
-	ai     service.AI // опционально (для org:ai_summary)
-	log    *slog.Logger
+	api        *maxclient.Client
+	fsm        *fsm.Manager
+	role       service.Role
+	events     service.Event
+	ai         service.AI // опционально (для org:ai_summary)
+	eventsRepo repo.EventRepo
+	db         repo.Querier
+	log        *slog.Logger
 }
 
-// NewOrganizerHandler — конструктор. ai может быть nil — в этом случае
-// org:ai_summary вернёт «AI недоступен».
+// NewOrganizerHandler — конструктор. ai, eventsRepo, db опциональны.
 func NewOrganizerHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
-	role service.Role, events service.Event, ai service.AI, log *slog.Logger,
+	role service.Role, events service.Event, ai service.AI,
+	eventsRepo repo.EventRepo, db repo.Querier,
+	log *slog.Logger,
 ) *OrganizerHandler {
 	return &OrganizerHandler{
-		api:    api,
-		fsm:    fsmMgr,
-		role:   role,
-		events: events,
-		ai:     ai,
-		log:    log.With("handler", "organizer"),
+		api:        api,
+		fsm:        fsmMgr,
+		role:       role,
+		events:     events,
+		ai:         ai,
+		eventsRepo: eventsRepo,
+		db:         db,
+		log:        log.With("handler", "organizer"),
 	}
 }
 
@@ -199,6 +206,13 @@ func (h *OrganizerHandler) sendText(ctx context.Context, chatID int64, text stri
 	}
 }
 
+func (h *OrganizerHandler) sendFallback(ctx context.Context, chatID int64) {
+	if err := h.api.SendTextWithKeyboard(ctx, chatID,
+		messages.FallbackUnknown(), keyboards.MainMenu()); err != nil {
+		h.log.Error("send fallback failed", "err", err)
+	}
+}
+
 // handleAccessErr — единая трактовка ошибок RequireEventOwner.
 func (h *OrganizerHandler) handleAccessErr(ctx context.Context, chatID int64, err error) {
 	switch {
@@ -212,6 +226,97 @@ func (h *OrganizerHandler) handleAccessErr(ctx context.Context, chatID int64, er
 	default:
 		h.log.Error("organizer access check failed", "err", err)
 		h.sendError(ctx, chatID)
+	}
+}
+
+// OnCloseCallback обрабатывает orgclose:* — закрытие и открытие регистрации из бота.
+// Ранее эти callback'и уходили в fallback (в RouteCallback был TODO).
+func (h *OrganizerHandler) OnCloseCallback(ctx context.Context, upd *schemes.MessageCallbackUpdate, p callbacks.Payload) {
+	chatID := upd.Message.Recipient.ChatId
+	userMaxID := upd.Callback.User.UserId
+
+	if err := h.api.AnswerCallback(ctx, upd.Callback.CallbackID, ""); err != nil {
+		h.log.Warn("answer callback failed", "err", err)
+	}
+
+	eventID := p.ArgInt64(0)
+	if eventID <= 0 {
+		h.sendFallback(ctx, chatID)
+		return
+	}
+
+	switch p.Action {
+	case "ask":
+		if _, err := h.role.RequireEventOwner(ctx, userMaxID, eventID); err != nil {
+			h.handleAccessErr(ctx, chatID, err)
+			return
+		}
+		ev, err := h.events.Get(ctx, eventID)
+		if err != nil || ev == nil {
+			h.sendError(ctx, chatID)
+			return
+		}
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.OrganizerCloseAsk(ev), keyboards.OrganizerCloseConfirm(eventID)); err != nil {
+			h.log.Error("send close ask failed", "err", err)
+		}
+
+	case "yes":
+		if _, err := h.role.RequireEventOwner(ctx, userMaxID, eventID); err != nil {
+			h.handleAccessErr(ctx, chatID, err)
+			return
+		}
+		if h.eventsRepo != nil && h.db != nil {
+			if err := h.eventsRepo.UpdateStatus(ctx, h.db, eventID, domain.EventStatusClosed); err != nil {
+				h.log.Error("close event failed", "err", err)
+				h.sendError(ctx, chatID)
+				return
+			}
+		}
+		ev, _ := h.events.Get(ctx, eventID)
+		if ev == nil {
+			h.sendText(ctx, chatID, messages.OrganizerClosed())
+			return
+		}
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.OrganizerClosed(), keyboards.OrganizerEventActions(eventID, ev.Status)); err != nil {
+			h.log.Error("send closed failed", "err", err)
+		}
+
+	case "open_ask":
+		if _, err := h.role.RequireEventOwner(ctx, userMaxID, eventID); err != nil {
+			h.handleAccessErr(ctx, chatID, err)
+			return
+		}
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			"Открыть регистрацию снова?", keyboards.OrganizerOpenConfirm(eventID)); err != nil {
+			h.log.Error("send open ask failed", "err", err)
+		}
+
+	case "open_yes":
+		if _, err := h.role.RequireEventOwner(ctx, userMaxID, eventID); err != nil {
+			h.handleAccessErr(ctx, chatID, err)
+			return
+		}
+		if h.eventsRepo != nil && h.db != nil {
+			if err := h.eventsRepo.UpdateStatus(ctx, h.db, eventID, domain.EventStatusOpen); err != nil {
+				h.log.Error("open event failed", "err", err)
+				h.sendError(ctx, chatID)
+				return
+			}
+		}
+		ev, _ := h.events.Get(ctx, eventID)
+		if ev == nil {
+			h.sendText(ctx, chatID, messages.OrganizerOpened())
+			return
+		}
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.OrganizerOpened(), keyboards.OrganizerEventActions(eventID, ev.Status)); err != nil {
+			h.log.Error("send opened failed", "err", err)
+		}
+
+	default:
+		h.sendFallback(ctx, chatID)
 	}
 }
 

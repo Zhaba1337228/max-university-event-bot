@@ -19,6 +19,7 @@ const regColumns = `id, user_id, event_id, status, interest_program,
     full_name_snapshot, contact_snapshot, waitlist_position,
     registered_at, cancelled_at, source,
     attendance_code, checkin_at, checkin_by, qr_sent_message_id,
+    notifications_disabled,
     created_at, updated_at`
 
 // Create вставляет или «реактивирует» запись (если до этого она была cancelled).
@@ -128,7 +129,7 @@ func (r *registrationsRepo) UpdateStatus(ctx context.Context, q Querier, id int6
 UPDATE registrations
 SET status = $2,
     cancelled_at = CASE
-        WHEN $2 IN ('cancelled_by_user','cancelled_by_organizer') THEN NOW()
+        WHEN $2 IN ('cancelled_by_user','cancelled_by_organizer','late_cancel') THEN NOW()
         ELSE cancelled_at
     END,
     updated_at = NOW()
@@ -367,6 +368,17 @@ func (r *registrationsRepo) AssignWaitlistPosition(ctx context.Context, q Querie
 	return nil
 }
 
+// SetNotificationsDisabled включает/отключает уведомления для конкретной записи.
+// TZ §6: пользователь может отказаться от уведомлений внутри записи.
+func (r *registrationsRepo) SetNotificationsDisabled(ctx context.Context, q Querier, id int64, disabled bool) error {
+	const stmt = `UPDATE registrations SET notifications_disabled = $2, updated_at = NOW() WHERE id = $1`
+	_, err := q.Exec(ctx, stmt, id, disabled)
+	if err != nil {
+		return fmt.Errorf("set notifications_disabled: %w", err)
+	}
+	return nil
+}
+
 func scanRegistration(row interface{ Scan(...any) error }, r *domain.Registration) error {
 	var status string
 	if err := row.Scan(
@@ -374,6 +386,7 @@ func scanRegistration(row interface{ Scan(...any) error }, r *domain.Registratio
 		&r.FullNameSnapshot, &r.ContactSnapshot, &r.WaitlistPosition,
 		&r.RegisteredAt, &r.CancelledAt, &r.Source,
 		&r.AttendanceCode, &r.CheckinAt, &r.CheckinBy, &r.QRSentMessageID,
+		&r.NotificationsDisabled,
 		&r.CreatedAt, &r.UpdatedAt,
 	); err != nil {
 		return err

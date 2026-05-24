@@ -42,6 +42,7 @@ const (
 	StateOrganizerNotifText    = "organizer_notif_text"
 	StateOrganizerNotifConfirm = "organizer_notif_confirm"
 	StateOrganizerCloseConfirm = "organizer_close_confirm"
+	StateOrganizerSearchCode   = "organizer_search_code"
 )
 
 // IsTextInput сообщает, ожидает ли состояние свободного текстового ввода
@@ -53,7 +54,8 @@ func IsTextInput(s State) bool {
 		StateRegContact,
 		StateRegInterest,
 		StateAIPickIntent,
-		StateOrganizerNotifText:
+		StateOrganizerNotifText,
+		StateOrganizerSearchCode:
 		return true
 	}
 	return false

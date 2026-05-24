@@ -40,6 +40,15 @@ func EventList(events []*domain.Event, offset int, hasMore bool) *maxbot.Keyboar
 // сервисов, которые должны отрезать корректный slice до передачи в EventList.
 func PageSize() int { return pageSize }
 
+// EventDetailsBack — клавиатура страницы «Подробнее»: назад к краткой карточке.
+func EventDetailsBack(eventID int64, backOffset int) *maxbot.Keyboard {
+	kb := newKB()
+	kb.AddRow().AddCallback("Назад к карточке", schemes.DEFAULT, callbacks.EventShow(eventID))
+	kb.AddRow().AddCallback("Назад к списку", schemes.NEGATIVE, callbacks.EventListPage(backOffset))
+	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
+	return kb
+}
+
 // EventCard — клавиатура карточки мероприятия.
 //
 // freeSeats > 0   → «Записаться» (POSITIVE)
@@ -50,9 +59,14 @@ func PageSize() int { return pageSize }
 func EventCard(eventID int64, freeSeats int, waitlistEnabled bool, backOffset int) *maxbot.Keyboard {
 	kb := newKB()
 	if freeSeats > 0 {
-		kb.AddRow().AddCallback("Записаться", schemes.POSITIVE, callbacks.RegStart(eventID))
-	} else if waitlistEnabled {
-		kb.AddRow().AddCallback("Встать в лист ожидания", schemes.DEFAULT, callbacks.WaitlistJoin(eventID))
+		kb.AddRow().
+			AddCallback("Записаться", schemes.POSITIVE, callbacks.RegStart(eventID)).
+			AddCallback("Подробнее", schemes.DEFAULT, callbacks.EventDetails(eventID))
+	} else {
+		kb.AddRow().AddCallback("Подробнее", schemes.DEFAULT, callbacks.EventDetails(eventID))
+		if waitlistEnabled {
+			kb.AddRow().AddCallback("Встать в лист ожидания", schemes.DEFAULT, callbacks.WaitlistJoin(eventID))
+		}
 	}
 	kb.AddRow().AddCallback("Назад к списку", schemes.NEGATIVE, callbacks.EventListPage(backOffset))
 	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())

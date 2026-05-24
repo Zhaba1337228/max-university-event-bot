@@ -85,9 +85,48 @@ func (h *OrganizerListHandler) OnCallback(ctx context.Context, upd *schemes.Mess
 		h.showPage(ctx, chatID, userMaxID, eventID, offset)
 	case "csv":
 		h.exportCSV(ctx, chatID, eventID)
+	case "search_code":
+		h.startSearchCode(ctx, chatID, userMaxID, eventID)
 	default:
 		h.log.Debug("unknown orglist action", "action", p.Action)
 		h.sendFallback(ctx, chatID)
+	}
+}
+
+// OnSearchCodeText — обработка текста в состоянии StateOrganizerSearchCode.
+func (h *OrganizerListHandler) OnSearchCodeText(ctx context.Context, upd *schemes.MessageCreatedUpdate, eventID int64) {
+	chatID := upd.Message.Recipient.ChatId
+	userMaxID := upd.Message.Sender.UserId
+	code := strings.TrimSpace(upd.Message.Body.Text)
+
+	if _, err := h.role.RequireEventOwner(ctx, userMaxID, eventID); err != nil {
+		h.handleAccessErr(ctx, chatID, err)
+		return
+	}
+
+	if code == "" {
+		h.sendText(ctx, chatID, "Код не может быть пустым. Попробуйте ещё раз.")
+		return
+	}
+
+	reg, err := h.regs.GetByCode(ctx, h.querier, code)
+	if err != nil {
+		h.log.Error("search by code failed", "err", err)
+		h.sendError(ctx, chatID)
+		return
+	}
+	if reg == nil {
+		if sendErr := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.OrgSearchCodeNotFound(), keyboards.OrganizerParticipantsBack(eventID)); sendErr != nil {
+			h.log.Error("send not found failed", "err", sendErr)
+		}
+		return
+	}
+
+	text := messages.OrgSearchCodeResult(code, reg.FullNameSnapshot, string(reg.Status))
+	if sendErr := h.api.SendTextWithKeyboard(ctx, chatID, text,
+		keyboards.OrganizerParticipantsBack(eventID)); sendErr != nil {
+		h.log.Error("send search result failed", "err", sendErr)
 	}
 }
 
@@ -217,6 +256,20 @@ func csvEscape(s string) string {
 		return "\"" + s + "\""
 	}
 	return s
+}
+
+func (h *OrganizerListHandler) startSearchCode(ctx context.Context, chatID, userMaxID, eventID int64) {
+	_ = h.fsm.Save(ctx, userMaxID, fsm.StateOrganizerSearchCode,
+		fsm.UserFSMContext{OrganizerEventID: eventID})
+	if err := h.api.SendText(ctx, chatID, messages.OrgSearchCodeAsk()); err != nil {
+		h.log.Error("send search code ask failed", "err", err)
+	}
+}
+
+func (h *OrganizerListHandler) sendText(ctx context.Context, chatID int64, text string) {
+	if err := h.api.SendText(ctx, chatID, text); err != nil {
+		h.log.Error("send text failed", "err", err)
+	}
 }
 
 func (h *OrganizerListHandler) handleAccessErr(ctx context.Context, chatID int64, err error) {

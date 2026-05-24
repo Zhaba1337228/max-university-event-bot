@@ -49,6 +49,7 @@ export type EventDTO = {
   free_seats?: number;
   short_summary?: string;
   created_by?: number;
+  late_cancel_allowed?: boolean;
 };
 
 export type EventInput = {
@@ -100,6 +101,12 @@ export type Registration = {
   registered_at?: string;
   checkin_at?: string;
   interest_program?: string;
+  attendance_code?: string;
+};
+
+export type LookupByCodeResp = {
+  registration: Registration;
+  event: EventDTO;
 };
 
 export type ListEventsResp = {

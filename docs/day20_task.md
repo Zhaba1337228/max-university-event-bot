@@ -54,10 +54,6 @@
 ### 6. Коммит и push
 ```
 docs(day20): final smoke + demo walkthrough + runbook
-
-Generated with [Devin](https://cli.devin.ai/docs)
-
-Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
 ```
 Дождаться зелёного CI (5 джобов).
 

@@ -28,20 +28,21 @@ const (
 // Capacity — целевое число мест; остаток считается через CountByEvent(registered).
 // Tags используется для AI-подбора по интересу абитуриента.
 type Event struct {
-	ID           int64
-	Title        string
-	Description  string
-	ShortSummary *string
-	StartsAt     time.Time
-	EndsAt       *time.Time
-	Location     string
-	Format       EventFormat
-	Capacity     int
-	Status       EventStatus
-	CreatedBy    *int64
-	Tags         []string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID                int64
+	Title             string
+	Description       string
+	ShortSummary      *string
+	StartsAt          time.Time
+	EndsAt            *time.Time
+	Location          string
+	Format            EventFormat
+	Capacity          int
+	Status            EventStatus
+	CreatedBy         *int64
+	Tags              []string
+	LateCancelAllowed bool
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 // IsOpenForRegistration сообщает, можно ли сейчас принимать новые записи.

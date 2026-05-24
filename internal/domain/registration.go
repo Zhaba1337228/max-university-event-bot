@@ -11,6 +11,7 @@ const (
 	RegStatusWaitlist             RegistrationStatus = "waitlist"
 	RegStatusCancelledByUser      RegistrationStatus = "cancelled_by_user"
 	RegStatusCancelledByOrganizer RegistrationStatus = "cancelled_by_organizer"
+	RegStatusLateCancel           RegistrationStatus = "late_cancel"
 	RegStatusAttended             RegistrationStatus = "attended"
 	RegStatusNoShow               RegistrationStatus = "no_show"
 )
@@ -26,23 +27,24 @@ const (
 // QRSentMessageID — id сообщения с PNG, чтобы кнопка «Показать мой QR» в
 // напоминании могла дать ссылку без перегенерации.
 type Registration struct {
-	ID               int64
-	UserID           int64
-	EventID          int64
-	Status           RegistrationStatus
-	InterestProgram  *string
-	FullNameSnapshot string
-	ContactSnapshot  string
-	WaitlistPosition *int
-	RegisteredAt     *time.Time
-	CancelledAt      *time.Time
-	Source           string
-	AttendanceCode   *string
-	CheckinAt        *time.Time
-	CheckinBy        *int64
-	QRSentMessageID  *int64
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                    int64
+	UserID                int64
+	EventID               int64
+	Status                RegistrationStatus
+	InterestProgram       *string
+	FullNameSnapshot      string
+	ContactSnapshot       string
+	WaitlistPosition      *int
+	RegisteredAt          *time.Time
+	CancelledAt           *time.Time
+	Source                string
+	AttendanceCode        *string
+	CheckinAt             *time.Time
+	CheckinBy             *int64
+	QRSentMessageID       *int64
+	NotificationsDisabled bool
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 // IsActive сообщает, является ли запись «живой» (registered либо waitlist).
@@ -52,5 +54,5 @@ func (s RegistrationStatus) IsActive() bool {
 
 // IsCancelled сообщает, отменена ли запись (любой стороной).
 func (s RegistrationStatus) IsCancelled() bool {
-	return s == RegStatusCancelledByUser || s == RegStatusCancelledByOrganizer
+	return s == RegStatusCancelledByUser || s == RegStatusCancelledByOrganizer || s == RegStatusLateCancel
 }

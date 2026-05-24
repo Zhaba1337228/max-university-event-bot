@@ -189,6 +189,7 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 		QR:              qrSvc,
 		AI:              aiSvc,
 		RegsRepo:        regsRepo,
+		EventsRepo:      eventsRepo,
 		DB:              pool,
 		WaitlistEnabled: cfg.Business.WaitlistEnabled,
 		PolicyVersion:   cfg.Policy.PrivacyPolicyVersion,

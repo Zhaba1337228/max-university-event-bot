@@ -75,6 +75,7 @@ type RegistrationRepo interface {
 	NextWaitlist(ctx context.Context, q Querier, eventID int64) (*domain.Registration, error)
 	NextWaitlistPosition(ctx context.Context, q Querier, eventID int64) (int, error)
 	AssignWaitlistPosition(ctx context.Context, q Querier, registrationID int64, pos int) error
+	SetNotificationsDisabled(ctx context.Context, q Querier, id int64, disabled bool) error
 }
 
 // ActionLogRepo — операции над audit log.

@@ -15,18 +15,31 @@ import (
 // =============================================================================
 
 // Welcome — приветствие при /start. Если знаем имя пользователя — обращаемся.
+// Содержит дисклеймер, обязательный по правилам платформы.
 func Welcome(name string) string {
+	disclaimer := joinLines(
+		"Сервис разработан командой хакатона университета и не является",
+		"официальной функцией платформы MAX.",
+		"",
+	)
 	if name == "" {
-		return "Здравствуйте! Я помогу записаться на мероприятие университета.\n\n" +
-			"Что хотите сделать?"
+		return disclaimer + joinLines(
+			"Здравствуйте! Я помогу записаться на мероприятие университета.",
+			"",
+			"Что хотите сделать?",
+		)
 	}
-	return fmt.Sprintf("Здравствуйте, %s! Я помогу записаться на мероприятие университета.\n\n"+
-		"Что хотите сделать?", name)
+	return disclaimer + fmt.Sprintf(
+		"Здравствуйте, %s! Я помогу записаться на мероприятие университета.\n\nЧто хотите сделать?",
+		name,
+	)
 }
 
 // Help — текст команды /help.
 func Help() string {
 	return joinLines(
+		"Сервис разработан командой хакатона университета. Не является официальной функцией MAX.",
+		"",
 		"Я умею:",
 		"- показать список мероприятий и записать вас;",
 		"- показать вашу запись и статус;",
@@ -108,8 +121,22 @@ func EventListHeader() string {
 }
 
 // EventListItem — одна строка в текстовом списке (если в кнопках не помещается весь заголовок).
+// Содержит название, дату, формат и длительность (если известна).
 func EventListItem(idx int, e *domain.Event) string {
-	return fmt.Sprintf("%d. %s (%s)", idx+1, e.Title, FormatDateTime(e.StartsAt))
+	dur := ""
+	if e.EndsAt != nil {
+		d := e.EndsAt.Sub(e.StartsAt)
+		h := int(d.Hours())
+		m := int(d.Minutes()) % 60
+		if h > 0 && m > 0 {
+			dur = fmt.Sprintf(", %d ч %d мин", h, m)
+		} else if h > 0 {
+			dur = fmt.Sprintf(", %d ч", h)
+		} else {
+			dur = fmt.Sprintf(", %d мин", m)
+		}
+	}
+	return fmt.Sprintf("%d. %s — %s (%s%s)", idx+1, e.Title, FormatDateTime(e.StartsAt), HumanFormat(e.Format), dur)
 }
 
 // EventCard — карточка одного мероприятия.
@@ -118,16 +145,50 @@ func EventCard(e *domain.Event, freeSeats int) string {
 	if e.ShortSummary != nil && *e.ShortSummary != "" {
 		summary = *e.ShortSummary
 	}
+	timeStr := FormatDateTime(e.StartsAt)
+	if e.EndsAt != nil {
+		timeStr += " — " + FormatTime(*e.EndsAt)
+	}
+	seatsLine := fmt.Sprintf("Свободно мест: %d из %d", freeSeats, e.Capacity)
+	if freeSeats == 0 {
+		seatsLine = "Мест нет"
+	}
 	return joinLines(
 		e.Title,
 		"",
-		"Когда: "+FormatDateTime(e.StartsAt),
+		"Когда: "+timeStr,
 		"Где: "+e.Location,
 		"Формат: "+HumanFormat(e.Format),
-		fmt.Sprintf("Свободно мест: %d из %d", freeSeats, e.Capacity),
+		seatsLine,
 		"",
 		summary,
 	)
+}
+
+// EventDetails — расширенная карточка по кнопке «Подробнее».
+func EventDetails(e *domain.Event) string {
+	timeStr := FormatDateTime(e.StartsAt)
+	if e.EndsAt != nil {
+		timeStr += " — " + FormatTime(*e.EndsAt)
+	}
+	cancelPolicy := "до начала мероприятия"
+	if e.LateCancelAllowed {
+		cancelPolicy = "в любое время (в т.ч. после начала)"
+	}
+	lines := []string{
+		e.Title,
+		"",
+		"Когда: " + timeStr,
+		"Где: " + e.Location,
+		"Формат: " + HumanFormat(e.Format),
+		fmt.Sprintf("Мест всего: %d", e.Capacity),
+		"",
+		"Описание:",
+		e.Description,
+		"",
+		"Условия отмены: " + cancelPolicy,
+	}
+	return joinLines(lines...)
 }
 
 // EventNotAvailable — карточка с несуществующим/закрытым id.
@@ -183,27 +244,34 @@ func RegConfirmation(e *domain.Event, ctxFSM fsm.UserFSMContext) string {
 		"Мероприятие: "+e.Title,
 		"Когда: "+FormatDateTime(e.StartsAt),
 		"Где: "+e.Location,
+		"Формат: "+HumanFormat(e.Format),
 		"",
 		"ФИО: "+ctxFSM.DraftFullName,
 		"Контакт: "+ctxFSM.DraftContact,
 		"Направление: "+ctxFSM.DraftInterest,
+		"",
+		"Запись можно будет отменить до начала мероприятия — место вернётся в пул.",
 		"",
 		"Всё верно?",
 	)
 }
 
 // RegSuccess — после успешной записи (status=registered).
-// На дне 15 после этого сообщения отдельно посылается PNG с QR-кодом.
-func RegSuccess(e *domain.Event) string {
+// attendanceCode — уникальный код записи для идентификации участника.
+func RegSuccess(e *domain.Event, attendanceCode string) string {
+	codeStr := ""
+	if attendanceCode != "" {
+		codeStr = "\nКод записи: " + attendanceCode
+	}
 	return joinLines(
 		"Вы записаны на мероприятие.",
 		"",
 		"Мероприятие: "+e.Title,
 		"Когда: "+FormatDateTime(e.StartsAt),
 		"Где: "+e.Location,
-		"Статус: запись подтверждена.",
+		"Статус: запись подтверждена."+codeStr,
 		"",
-		"Я пришлю QR-код приглашения отдельным сообщением - покажете его на входе.",
+		"QR-код приглашения будет отправлен отдельным сообщением — покажите его на входе.",
 		"За день до мероприятия и за час до начала придёт напоминание.",
 	)
 }
@@ -307,6 +375,16 @@ func CancelDone() string {
 	return "Запись отменена. Если планы изменятся - вы сможете записаться снова, если останутся места."
 }
 
+// CancelLateForbidden — попытка отмены после начала мероприятия, когда это запрещено.
+func CancelLateForbidden() string {
+	return "Мероприятие уже началось. Отмена записи после старта не предусмотрена правилами этого мероприятия."
+}
+
+// CancelLate — поздняя отмена разрешена правилами мероприятия.
+func CancelLate() string {
+	return "Запись отменена (поздняя отмена). Мероприятие уже началось, поэтому место может не вернуться в пул."
+}
+
 // =============================================================================
 // QR check-in
 // =============================================================================
@@ -400,6 +478,37 @@ func ReminderText(e *domain.Event, hoursBefore int) string {
 // =============================================================================
 // Организаторская часть
 // =============================================================================
+
+// NotifDisabledDone — уведомления по записи отключены.
+func NotifDisabledDone() string {
+	return "Уведомления по этому мероприятию отключены. Включить обратно можно через «Моя запись»."
+}
+
+// NotifEnabledDone — уведомления по записи включены.
+func NotifEnabledDone() string {
+	return "Уведомления по этому мероприятию включены."
+}
+
+// OrgSearchCodeAsk — приглашение ввести код записи для поиска.
+func OrgSearchCodeAsk() string {
+	return "Введите код записи участника (например: a1b2c3d4)."
+}
+
+// OrgSearchCodeNotFound — код не найден.
+func OrgSearchCodeNotFound() string {
+	return "Участник с таким кодом записи не найден."
+}
+
+// OrgSearchCodeResult — найденная запись.
+func OrgSearchCodeResult(code, fullName, status string) string {
+	return joinLines(
+		"Результат поиска:",
+		"",
+		"Код: "+code,
+		"Участник: "+fullName,
+		"Статус: "+status,
+	)
+}
 
 // OrganizerNoAccess — попытка зайти без роли organizer/admin.
 func OrganizerNoAccess() string {

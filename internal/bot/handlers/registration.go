@@ -260,7 +260,17 @@ func (h *RegistrationHandler) onConfirm(ctx context.Context, chatID, userMaxID i
 		h.sendText(ctx, chatID, "Запись подтверждена.")
 		return
 	}
-	if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.RegSuccess(event), keyboards.AfterRegistration()); err != nil {
+
+	// Получаем attendance_code для отображения пользователю (TZ §2: код записи).
+	var attendanceCode string
+	if h.regsRepo != nil && h.db != nil {
+		reg, _ := h.regsRepo.Get(ctx, h.db, res.RegistrationID)
+		if reg != nil && reg.AttendanceCode != nil {
+			attendanceCode = *reg.AttendanceCode
+		}
+	}
+
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.RegSuccess(event, attendanceCode), keyboards.AfterRegistration()); err != nil {
 		h.log.Error("send success failed", "err", err)
 	}
 

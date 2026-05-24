@@ -178,7 +178,7 @@ func TestMyRegistrationConditional(t *testing.T) {
 	t.Parallel()
 
 	// regID == 0 → нет QR-кнопки и нет «Отменить»
-	kb := keyboards.MyRegistration(0)
+	kb := keyboards.MyRegistration(0, false)
 	if hasCallbackText(kb.Build(), "Показать мой QR") {
 		t.Errorf("regID=0: unexpected QR button")
 	}
@@ -187,7 +187,7 @@ func TestMyRegistrationConditional(t *testing.T) {
 	}
 
 	// regID != 0 → есть обе кнопки
-	kb2 := keyboards.MyRegistration(77)
+	kb2 := keyboards.MyRegistration(77, false)
 	if !hasCallbackText(kb2.Build(), "Показать мой QR") {
 		t.Errorf("regID=77: missing QR button")
 	}

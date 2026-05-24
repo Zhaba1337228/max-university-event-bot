@@ -46,15 +46,31 @@ func AfterWaitlist() *maxbot.Keyboard {
 }
 
 // MyRegistration — кнопки на экране «Моя запись».
-// Если есть активная регистрация (regID != 0) — показываем «Показать QR» и «Отменить».
+// Если есть активная регистрация (regID != 0) — показываем «Показать QR», «Отменить» и
+// «Откл./Вкл. уведомления» (нотиф-тогл, TZ §6).
 // «История» доступна всегда.
-func MyRegistration(regID int64) *maxbot.Keyboard {
+func MyRegistration(regID int64, notifDisabled bool) *maxbot.Keyboard {
 	kb := newKB()
 	if regID != 0 {
 		kb.AddRow().AddCallback("Показать мой QR", schemes.DEFAULT, callbacks.MyShowQR(regID))
-		kb.AddRow().AddCallback("Отменить запись", schemes.NEGATIVE, callbacks.CancelAsk(regID))
+		notifLabel := "Откл. уведомления"
+		if notifDisabled {
+			notifLabel = "Вкл. уведомления"
+		}
+		kb.AddRow().
+			AddCallback(notifLabel, schemes.DEFAULT, callbacks.MyToggleNotif(regID)).
+			AddCallback("Отменить запись", schemes.NEGATIVE, callbacks.CancelAsk(regID))
 	}
 	kb.AddRow().AddCallback("История действий", schemes.DEFAULT, callbacks.MyHistory())
+	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
+	return kb
+}
+
+// AfterCancel — клавиатура после успешной отмены записи.
+// Предлагаем сразу посмотреть другие мероприятия (ТЗ требует).
+func AfterCancel() *maxbot.Keyboard {
+	kb := newKB()
+	kb.AddRow().AddCallback("Смотреть мероприятия", schemes.DEFAULT, callbacks.EventListPage(0))
 	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
 	return kb
 }

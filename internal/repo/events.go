@@ -14,7 +14,7 @@ type eventsRepo struct{}
 func NewEvents() EventRepo { return &eventsRepo{} }
 
 const eventColumns = `id, title, description, short_summary, starts_at, ends_at,
-    location, format, capacity, status, created_by, tags, created_at, updated_at`
+    location, format, capacity, status, created_by, tags, late_cancel_allowed, created_at, updated_at`
 
 func (r *eventsRepo) Create(ctx context.Context, q Querier, e *domain.Event) (int64, error) {
 	if e == nil {
@@ -32,13 +32,14 @@ func (r *eventsRepo) Create(ctx context.Context, q Querier, e *domain.Event) (in
 
 	const stmt = `
 INSERT INTO events (title, description, short_summary, starts_at, ends_at,
-    location, format, capacity, status, created_by, tags)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    location, format, capacity, status, created_by, tags, late_cancel_allowed)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING id, created_at, updated_at`
 
 	err := q.QueryRow(ctx, stmt,
 		e.Title, e.Description, e.ShortSummary, e.StartsAt, e.EndsAt,
 		e.Location, string(e.Format), e.Capacity, string(e.Status), e.CreatedBy, e.Tags,
+		e.LateCancelAllowed,
 	).Scan(&e.ID, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return 0, fmt.Errorf("insert event: %w", err)
@@ -197,6 +198,7 @@ SET title = $2,
     capacity = $9,
     status = $10,
     tags = $11,
+    late_cancel_allowed = $12,
     updated_at = NOW()
 WHERE id = $1
 RETURNING updated_at`
@@ -204,6 +206,7 @@ RETURNING updated_at`
 	return q.QueryRow(ctx, stmt,
 		e.ID, e.Title, e.Description, e.ShortSummary, e.StartsAt, e.EndsAt,
 		e.Location, string(e.Format), e.Capacity, string(e.Status), e.Tags,
+		e.LateCancelAllowed,
 	).Scan(&e.UpdatedAt)
 }
 
@@ -283,6 +286,7 @@ func scanEvent(row interface{ Scan(...any) error }, e *domain.Event) error {
 	if err := row.Scan(
 		&e.ID, &e.Title, &e.Description, &e.ShortSummary, &e.StartsAt, &e.EndsAt,
 		&e.Location, &format, &e.Capacity, &status, &e.CreatedBy, &e.Tags,
+		&e.LateCancelAllowed,
 		&e.CreatedAt, &e.UpdatedAt,
 	); err != nil {
 		return err
@@ -297,6 +301,7 @@ func scanEventWithTotal(row interface{ Scan(...any) error }, e *domain.Event, to
 	if err := row.Scan(
 		&e.ID, &e.Title, &e.Description, &e.ShortSummary, &e.StartsAt, &e.EndsAt,
 		&e.Location, &format, &e.Capacity, &status, &e.CreatedBy, &e.Tags,
+		&e.LateCancelAllowed,
 		&e.CreatedAt, &e.UpdatedAt, total,
 	); err != nil {
 		return err

@@ -55,6 +55,7 @@ type HandlersConfig struct {
 	QR              service.QR
 	AI              service.AI
 	RegsRepo        repo.RegistrationRepo
+	EventsRepo      repo.EventRepo
 	DB              repo.Querier
 	WaitlistEnabled bool
 	PolicyVersion   string
@@ -75,11 +76,13 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 		cfg.QR, cfg.RegsRepo, cfg.DB,
 		cfg.Log, cfg.PolicyVersion)
 	h.MyReg = handlers.NewMyRegistrationHandler(cfg.API, cfg.FSM,
-		cfg.Users, cfg.Registration, cfg.Events, cfg.ActionLogs, cfg.Log)
+		cfg.Users, cfg.Registration, cfg.Events, cfg.ActionLogs,
+		cfg.RegsRepo, cfg.DB, cfg.Log)
 	h.Cancel = handlers.NewCancelHandler(cfg.API, cfg.FSM,
 		cfg.Registration, cfg.Users, cfg.Events, cfg.Log)
 	h.Waitlist = handlers.NewWaitlistHandler(cfg.API, cfg.FSM, h.Registration, cfg.Log)
-	h.Organizer = handlers.NewOrganizerHandler(cfg.API, cfg.FSM, cfg.Role, cfg.Events, cfg.AI, cfg.Log)
+	h.Organizer = handlers.NewOrganizerHandler(cfg.API, cfg.FSM, cfg.Role, cfg.Events, cfg.AI,
+		cfg.EventsRepo, cfg.DB, cfg.Log)
 	h.OrganizerList = handlers.NewOrganizerListHandler(cfg.API, cfg.FSM, cfg.Role,
 		cfg.Events, cfg.RegsRepo, cfg.DB, cfg.Log)
 	h.OrgNotify = handlers.NewOrganizerNotifyHandler(cfg.API, cfg.FSM, cfg.Role,
@@ -135,6 +138,8 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 		h.Registration.OnText(ctx, upd, snap)
 	case fsm.StateOrganizerNotifText:
 		h.OrgNotify.OnText(ctx, upd, snap)
+	case fsm.StateOrganizerSearchCode:
+		h.OrganizerList.OnSearchCodeText(ctx, upd, snap.Context.OrganizerEventID)
 	case fsm.StateAIPickIntent:
 		if h.AIPick != nil {
 			h.AIPick.OnText(ctx, upd, snap)
@@ -171,6 +176,8 @@ func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallba
 		h.OrganizerList.OnCallback(ctx, upd, p)
 	case callbacks.GroupOrgNotif:
 		h.OrgNotify.OnCallback(ctx, upd, p)
+	case callbacks.GroupOrgClose:
+		h.Organizer.OnCloseCallback(ctx, upd, p)
 	case callbacks.GroupAI:
 		if h.AIPick != nil {
 			h.AIPick.OnCallback(ctx, upd, p)
@@ -178,7 +185,6 @@ func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallba
 			h.Fallback.OnCallback(ctx, upd, p)
 		}
 	default:
-		// Будущее: orgclose/admin
 		h.Fallback.OnCallback(ctx, upd, p)
 	}
 }

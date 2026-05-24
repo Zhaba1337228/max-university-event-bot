@@ -41,7 +41,7 @@ func NewEventsHandler(api *maxclient.Client, fsmMgr *fsm.Manager, ev service.Eve
 	}
 }
 
-// OnCallback маршрутизирует callback'и группы "ev:" — list, show.
+// OnCallback маршрутизирует callback'и группы "ev:" — list, show, details.
 func (h *EventsHandler) OnCallback(ctx context.Context, upd *schemes.MessageCallbackUpdate, p callbacks.Payload) {
 	// Закрываем спиннер «крутится» сразу, чтобы UI отвечал быстро.
 	if err := h.api.AnswerCallback(ctx, upd.Callback.CallbackID, ""); err != nil {
@@ -58,6 +58,9 @@ func (h *EventsHandler) OnCallback(ctx context.Context, upd *schemes.MessageCall
 	case "show":
 		eventID := p.ArgInt64(0)
 		h.showCard(ctx, chatID, userID, eventID)
+	case "details":
+		eventID := p.ArgInt64(0)
+		h.showDetails(ctx, chatID, userID, eventID)
 	default:
 		h.log.Debug("unknown ev action", "action", p.Action)
 		if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.FallbackUnknown(), keyboards.MainMenu()); err != nil {
@@ -143,5 +146,24 @@ func (h *EventsHandler) showCard(ctx context.Context, chatID, userID int64, even
 	kb := keyboards.EventCard(withFree.Event.ID, withFree.FreeSeats, h.businessWaitlistEnabled, snap.Context.Offset)
 	if err := h.api.SendTextWithKeyboard(ctx, chatID, text, kb); err != nil {
 		h.log.Error("send card failed", "err", err)
+	}
+}
+
+// showDetails — кнопка «Подробнее»: расширенная карточка со всем описанием и условиями.
+func (h *EventsHandler) showDetails(ctx context.Context, chatID, userID int64, eventID int64) {
+	ev, err := h.events.Get(ctx, eventID)
+	if err != nil {
+		h.log.Error("get event for details failed", "err", err, "event_id", eventID)
+		if sendErr := h.api.SendTextWithKeyboard(ctx, chatID, messages.ErrorTryLater(), keyboards.MainMenu()); sendErr != nil {
+			h.log.Error("send error msg failed", "err", sendErr)
+		}
+		return
+	}
+	snap, _ := h.fsm.Load(ctx, userID)
+	text := messages.EventDetails(ev)
+	// Возвращаемся к карточке (краткой) — кнопка «Назад к карточке»
+	kb := keyboards.EventDetailsBack(eventID, snap.Context.Offset)
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, text, kb); err != nil {
+		h.log.Error("send details failed", "err", err)
 	}
 }
