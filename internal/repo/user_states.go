@@ -14,9 +14,9 @@ func NewUserStates() UserStateRepo { return &userStatesRepo{} }
 // defaultState — состояние по умолчанию, если для пользователя нет строки в user_states.
 const defaultState = "main_menu"
 
-// Load возвращает state и context. Для нового пользователя — main_menu и пустой контекст.
+// Load возвращает state и context по MAX user_id. Для нового пользователя — main_menu и пустой контекст.
 func (r *userStatesRepo) Load(ctx context.Context, q Querier, userID int64) (string, []byte, error) {
-	const stmt = `SELECT state, context FROM user_states WHERE user_id = $1`
+	const stmt = `SELECT state, context FROM user_states WHERE max_user_id = $1`
 
 	var state string
 	var data []byte
@@ -33,7 +33,7 @@ func (r *userStatesRepo) Load(ctx context.Context, q Querier, userID int64) (str
 	return state, data, nil
 }
 
-// Save UPSERT строки user_states.
+// Save UPSERT строки user_states по MAX user_id.
 func (r *userStatesRepo) Save(ctx context.Context, q Querier, userID int64, state string, contextJSON []byte) error {
 	if state == "" {
 		state = defaultState
@@ -42,9 +42,9 @@ func (r *userStatesRepo) Save(ctx context.Context, q Querier, userID int64, stat
 		contextJSON = []byte("{}")
 	}
 	const stmt = `
-INSERT INTO user_states (user_id, state, context, updated_at)
+INSERT INTO user_states (max_user_id, state, context, updated_at)
 VALUES ($1, $2, $3, NOW())
-ON CONFLICT (user_id) DO UPDATE
+ON CONFLICT (max_user_id) DO UPDATE
 SET state = EXCLUDED.state,
     context = EXCLUDED.context,
     updated_at = NOW()`

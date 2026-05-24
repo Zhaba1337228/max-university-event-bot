@@ -16,7 +16,7 @@ func TestUserStatesLoadDefaultIfMissing(t *testing.T) {
 	mock := newMock(t)
 	st := repo.NewUserStates()
 
-	mock.ExpectQuery(`SELECT state, context FROM user_states WHERE user_id = $1`).
+	mock.ExpectQuery(`SELECT state, context FROM user_states WHERE max_user_id = $1`).
 		WithArgs(int64(7)).
 		WillReturnError(pgx.ErrNoRows)
 
@@ -37,7 +37,7 @@ func TestUserStatesLoadExisting(t *testing.T) {
 	mock := newMock(t)
 	st := repo.NewUserStates()
 
-	mock.ExpectQuery(`SELECT state, context FROM user_states WHERE user_id = $1`).
+	mock.ExpectQuery(`SELECT state, context FROM user_states WHERE max_user_id = $1`).
 		WithArgs(int64(7)).
 		WillReturnRows(pgxmock.NewRows([]string{"state", "context"}).
 			AddRow("reg_full_name", []byte(`{"current_event_id":1}`)))
