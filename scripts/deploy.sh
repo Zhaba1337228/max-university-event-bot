@@ -119,13 +119,11 @@ CADDYFILE="deployments/Caddyfile.gen"
 
 if [ "$USE_TLS" = true ]; then
   cat > "$CADDYFILE" <<CADDYEOF
-\${DOMAIN} {
+${DOMAIN} {
 
   handle /webhook/* {
     reverse_proxy bot:8080 {
       header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
-      header_up X-Forwarded-Proto {scheme}
     }
   }
 
@@ -136,8 +134,6 @@ if [ "$USE_TLS" = true ]; then
   handle {
     reverse_proxy web:3000 {
       header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
-      header_up X-Forwarded-Proto {scheme}
     }
   }
 
@@ -158,12 +154,11 @@ if [ "$USE_TLS" = true ]; then
 CADDYEOF
 else
   cat > "$CADDYFILE" <<CADDYEOF
-http://\${DOMAIN} {
+http://${DOMAIN} {
 
   handle /webhook/* {
     reverse_proxy bot:8080 {
       header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
     }
   }
 
@@ -174,7 +169,6 @@ http://\${DOMAIN} {
   handle {
     reverse_proxy web:3000 {
       header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
     }
   }
 
