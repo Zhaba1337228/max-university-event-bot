@@ -120,8 +120,11 @@ services:
       - no-new-privileges:true
 
   # ──────────────────────────────────────────────────────────────────
-  # Caddy — единственная точка входа снаружи (80 + 443).
-  # Автоматически получает Let's Encrypt TLS-сертификат.
+  # Caddy — единственная точка входа снаружи.
+  #
+  # Режим по умолчанию: HTTP (порт 80), работает с IP-адресом.
+  # Для HTTPS с доменом: раскомментируй порты 443, убери "http://"
+  # из Caddyfile строки `http://{$DOMAIN}`.
   # ──────────────────────────────────────────────────────────────────
   caddy:
     image: caddy:2-alpine
@@ -130,8 +133,9 @@ services:
       - bot
     ports:
       - "80:80"
-      - "443:443"
-      - "443:443/udp"   # HTTP/3
+      # Раскомментируй для HTTPS (нужен реальный домен → Let's Encrypt):
+      # - "443:443"
+      # - "443:443/udp"   # HTTP/3
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -142,7 +146,7 @@ services:
     cap_drop:
       - ALL
     cap_add:
-      - NET_BIND_SERVICE   # нужно для bind 80/443
+      - NET_BIND_SERVICE   # нужно для bind 80
     security_opt:
       - no-new-privileges:true
 

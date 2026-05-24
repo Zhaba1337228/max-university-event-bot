@@ -1,20 +1,27 @@
 # =============================================================================
 # Caddyfile — production reverse proxy для MAX University Event Bot
 #
-# Заполни DOMAIN в .env.prod:   DOMAIN=bot.youruniversity.ru
-# Caddy автоматически получит TLS-сертификат от Let's Encrypt.
+# Режимы:
+#   HTTP (IP или домен без TLS) — работает из коробки:
+#     DOMAIN=1.2.3.4   или   DOMAIN=bot.youruniversity.ru
+#
+#   HTTPS (только с доменом + Let's Encrypt):
+#     Убери "http://" из строки ниже — Caddy автоматически получит сертификат.
+#     Нужен: домен → IP, порт 80 и 443 открыты.
 #
 # Маршрутизация:
-#   https://{DOMAIN}/              → Next.js admin panel (web:3000)
-#   https://{DOMAIN}/api/*         → Next.js (web:3000, который прокидывает в bot:8081)
-#   https://{DOMAIN}/webhook/max   → Go-бот (bot:8080, MAX hook)
-#   http://{DOMAIN}                → редирект на https (автоматически в Caddy)
+#   http://{DOMAIN}/              → Next.js admin panel (web:3000)
+#   http://{DOMAIN}/api/*         → Next.js → bot:8081 (через rewrite)
+#   http://{DOMAIN}/webhook/max   → Go-бот (bot:8080)
+#   http://{DOMAIN}/healthz       → Go-бот (bot:8080)
 # =============================================================================
 
-{$DOMAIN} {
+# "http://" перед доменом = форсированный HTTP, без TLS-сертификата.
+# Работает как с доменом, так и с IP-адресом.
+# Убери "http://" чтобы включить автоматический HTTPS (нужен настоящий домен).
+http://{$DOMAIN} {
 
   # ── Webhook MAX-бота ────────────────────────────────────────────────────
-  # Должен быть ПЕРВЫМ — более специфичный префикс.
   handle /webhook/* {
     reverse_proxy bot:8080 {
       header_up X-Real-IP {remote_host}
@@ -22,40 +29,34 @@
     }
   }
 
-  # ── Healthcheck бота (для мониторинга извне) ────────────────────────────
+  # ── Healthcheck ──────────────────────────────────────────────────────────
   handle /healthz {
     reverse_proxy bot:8080
   }
 
   # ── Всё остальное → Next.js ─────────────────────────────────────────────
-  # Next.js сам прокидывает /api/* → bot:8081 через rewrites в next.config.mjs.
   handle {
     reverse_proxy web:3000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
-      # Если Next.js вернул 5xx — показываем страницу ошибки
-      @error status 5xx
     }
   }
 
-  # ── Логи (JSON для удобной выгрузки в мониторинг) ───────────────────────
+  # ── Логи ─────────────────────────────────────────────────────────────────
   log {
     output stdout
     format json
     level  INFO
   }
 
-  # ── Заголовки безопасности ───────────────────────────────────────────────
+  # ── Заголовки безопасности (HTTP-совместимые) ────────────────────────────
   header {
-    # Блокировать отображение в iframe стороннего сайта
-    X-Frame-Options           "SAMEORIGIN"
-    # Запретить MIME-sniffing
-    X-Content-Type-Options    "nosniff"
-    # HSTS: 1 год
-    Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    # Базовая CSP (кастомизируй под нужды)
-    X-XSS-Protection          "1; mode=block"
-    # Убрать Server-заголовок
+    X-Frame-Options        "SAMEORIGIN"
+    X-Content-Type-Options "nosniff"
+    X-XSS-Protection       "1; mode=block"
     -Server
+    # HSTS убран — актуален только для HTTPS.
+    # Включи когда перейдёшь на домен + TLS:
+    # Strict-Transport-Security "max-age=31536000; includeSubDomains"
   }
 }
