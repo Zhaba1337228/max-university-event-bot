@@ -69,6 +69,33 @@ curl -fsS http://localhost:8081/api/healthz   # admin API
 `ADMIN_USER_IDS` — аналогично, для роли admin (на MVP она используется
 только как «суперроль» над organizer; отдельных команд /admin нет).
 
+### Проверить, что напоминания о регистрации живы
+
+Напоминания хранятся в таблице `notifications` и создаются scheduler'ом
+по `DEFAULT_EVENT_REMINDER_HOURS` (по умолчанию `24,1`).
+
+Быстрые проверки:
+
+```sql
+-- Какие reminder'ы вообще есть в системе.
+SELECT type, status, count(*)
+FROM notifications
+GROUP BY type, status
+ORDER BY type, status;
+
+-- Что запланировано по конкретному пользователю / событию.
+SELECT id, type, status, scheduled_at, sent_at, error
+FROM notifications
+WHERE user_id = $1 AND event_id = $2
+ORDER BY scheduled_at DESC;
+```
+
+Что важно помнить:
+
+- если до старта события уже меньше 24 часов, `reminder_24h` не появится;
+- если до старта уже меньше часа, scheduler не создаёт просроченный `reminder_1h`;
+- dispatch-job отправляет pending-уведомления раз в минуту.
+
 ### Включить/выключить AI
 
 - `GIGACHAT_AUTH_KEY=""` — выключает GigaChat-клиент целиком.
@@ -100,8 +127,9 @@ curl -fsS http://localhost:8081/api/healthz   # admin API
   оставляет вырожденных FK.
 - Если по каким-то причинам пользователь не может зайти в бота
   (заблокировали аккаунт MAX) — операция всё ещё делается одной командой
-  на бэкенде. Найти `max_user_id` по email/телефону можно в
-  `registrations` (`contact_snapshot`, `full_name_snapshot`). После
+  на бэкенде. Для новых регистраций контакт уже не собирается, поэтому
+  ориентируемся в первую очередь на `max_user_id` и `full_name_snapshot`;
+  `contact_snapshot` может быть заполнен только у legacy-записей. После
   идентификации выполнить через psql на host'е базы:
 
   ```sql
@@ -229,9 +257,9 @@ docker compose -f deployments/docker-compose.yml run --rm migrate /app/migrate d
    `make docker-up` — миграции и сид пересоздадутся.
 2. **QR-картинка не доставлена.** В `registrations` есть
    `qr_sent_message_id`. Если оно `NULL`, пользователь может в боте
-   нажать «Мои записи → Показать QR» — бот перегенерирует картинку из
+   нажать «Мои записи → Показать мой QR» — бот перегенерирует картинку из
    `attendance_code`.
-3. **Рассылка зависла.** Проверить `notifications.status='pending'`:
+3. **Рассылка или напоминания зависли.** Проверить `notifications.status='pending'`:
    ```
    SELECT status, count(*) FROM notifications
    WHERE event_id = $1 GROUP BY status;
@@ -239,7 +267,7 @@ docker compose -f deployments/docker-compose.yml run --rm migrate /app/migrate d
    Scheduler-job `dispatchDue` запускается раз в минуту и обрабатывает
    до `NOTIFICATION_BATCH_SIZE=50` уведомлений за тик с
    `NOTIFICATION_RATE_LIMIT_RPS=20`. Если есть `failed` — посмотреть
-   `last_error` в той же таблице.
+   колонку `error` в той же таблице.
 4. **Бот лупится с `ping max api: 401`.** Неверный `MAX_BOT_TOKEN`.
    Это поведение by design — бот не должен стартовать с битым токеном.
    Поправить `.env` → рестарт.
