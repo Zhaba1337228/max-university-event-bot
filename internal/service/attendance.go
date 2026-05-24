@@ -72,6 +72,8 @@ const (
 	checkinPostWindow = 4 * time.Hour
 )
 
+var attendanceTZ = mustLoadAttendanceLocation("Europe/Moscow")
+
 func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64, payload string) (*CheckInResult, error) {
 	parsed, err := s.qr.ParseQRPayload(payload)
 	if err != nil {
@@ -120,11 +122,7 @@ func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64,
 			return ErrEventNotFound
 		}
 		now := time.Now()
-		windowStart := ev.StartsAt.Add(-checkinPreWindow)
-		windowEnd := ev.StartsAt.Add(checkinPostWindow)
-		if ev.EndsAt != nil {
-			windowEnd = ev.EndsAt.Add(checkinPostWindow)
-		}
+		windowStart, windowEnd := checkinWindowForEvent(ev)
 		if now.Before(windowStart) || now.After(windowEnd) {
 			return ErrCheckinWindowClosed
 		}
@@ -165,6 +163,32 @@ func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64,
 		return nil, txErr
 	}
 	return result, nil
+}
+
+func checkinWindowForEvent(ev *domain.Event) (time.Time, time.Time) {
+	windowStart := ev.StartsAt.Add(-checkinPreWindow)
+	windowEnd := ev.StartsAt.Add(checkinPostWindow)
+	if ev.EndsAt != nil {
+		return windowStart, ev.EndsAt.Add(checkinPostWindow)
+	}
+
+	// Для событий без ends_at считаем их "событиями дня":
+	// check-in открываем с полуночи по Москве в день события и держим до 04:00 следующего дня.
+	startMSK := ev.StartsAt.In(attendanceTZ)
+	dayStartMSK := time.Date(startMSK.Year(), startMSK.Month(), startMSK.Day(), 0, 0, 0, 0, attendanceTZ)
+	if dayStartMSK.Before(windowStart) {
+		windowStart = dayStartMSK
+	}
+	windowEnd = dayStartMSK.Add(24*time.Hour + checkinPostWindow)
+	return windowStart, windowEnd
+}
+
+func mustLoadAttendanceLocation(name string) *time.Location {
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		panic(err)
+	}
+	return loc
 }
 
 // ManualMark — ручная отметка attended/no_show. Используется веб-админкой,
