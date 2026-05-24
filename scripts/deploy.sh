@@ -118,54 +118,30 @@ echo ""
 CADDYFILE="deployments/Caddyfile.gen"
 
 if [ "$USE_TLS" = true ]; then
-  cat > "$CADDYFILE" <<CADDYEOF
-${DOMAIN} {
-
-  handle /webhook/* {
-    reverse_proxy bot:8080 {
-      header_up X-Real-IP {remote_host}
-    }
-  }
-
-  handle /healthz {
-    reverse_proxy bot:8080
-  }
-
-  handle {
-    reverse_proxy web:3000 {
-      header_up X-Real-IP {remote_host}
-    }
-  }
-
-  log {
-    output stdout
-    format json
-    level  INFO
-  }
-
-  header {
-    X-Frame-Options        "SAMEORIGIN"
-    X-Content-Type-Options "nosniff"
-    X-XSS-Protection       "1; mode=block"
-    Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    -Server
-  }
-}
-CADDYEOF
+  SITE_HEADER="${DOMAIN}"
+  HSTS_LINE='Strict-Transport-Security "max-age=31536000; includeSubDomains"'
 else
-  cat > "$CADDYFILE" <<CADDYEOF
-http://${DOMAIN} {
+  SITE_HEADER="http://${DOMAIN}"
+  HSTS_LINE=""
+fi
 
+cat > "$CADDYFILE" <<CADDYEOF
+${SITE_HEADER} {
+
+  # ── MAX webhook (only used when MAX_BOT_MODE=webhook) ──
   handle /webhook/* {
     reverse_proxy bot:8080 {
       header_up X-Real-IP {remote_host}
     }
   }
 
+  # ── Healthcheck via admin API (works in both longpoll and webhook modes) ──
   handle /healthz {
-    reverse_proxy bot:8080
+    rewrite * /api/healthz
+    reverse_proxy bot:8081
   }
 
+  # ── Everything else → Next.js admin panel ──
   handle {
     reverse_proxy web:3000 {
       header_up X-Real-IP {remote_host}
@@ -182,11 +158,11 @@ http://${DOMAIN} {
     X-Frame-Options        "SAMEORIGIN"
     X-Content-Type-Options "nosniff"
     X-XSS-Protection       "1; mode=block"
+    ${HSTS_LINE}
     -Server
   }
 }
 CADDYEOF
-fi
 
 ok "Caddyfile generated (${USE_TLS:-false} → $([ "$USE_TLS" = true ] && echo 'HTTPS' || echo 'HTTP'))"
 
