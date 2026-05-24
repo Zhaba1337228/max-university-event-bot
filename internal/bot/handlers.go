@@ -77,7 +77,7 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 		cfg.QR, cfg.RegsRepo, cfg.DB,
 		cfg.Log, cfg.PolicyVersion)
 	h.MyReg = handlers.NewMyRegistrationHandler(cfg.API, cfg.FSM,
-		cfg.Users, cfg.Registration, cfg.Events, cfg.ActionLogs,
+		cfg.Users, cfg.Registration, cfg.Events, cfg.ActionLogs, cfg.QR,
 		cfg.RegsRepo, cfg.DB, cfg.Log)
 	h.Cancel = handlers.NewCancelHandler(cfg.API, cfg.FSM,
 		cfg.Registration, cfg.Users, cfg.Events, cfg.Log)

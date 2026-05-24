@@ -24,6 +24,7 @@ type MyRegistrationHandler struct {
 	reg      service.Registration
 	events   service.Event
 	logs     service.ActionLog
+	qr       service.QR
 	regsRepo repo.RegistrationRepo
 	db       repo.Querier
 	log      *slog.Logger
@@ -33,7 +34,7 @@ type MyRegistrationHandler struct {
 // regsRepo и db опциональны (могут быть nil); без них toggle уведомлений не работает.
 func NewMyRegistrationHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
 	users service.User, reg service.Registration, events service.Event,
-	logs service.ActionLog,
+	logs service.ActionLog, qr service.QR,
 	regsRepo repo.RegistrationRepo, db repo.Querier,
 	log *slog.Logger,
 ) *MyRegistrationHandler {
@@ -44,6 +45,7 @@ func NewMyRegistrationHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
 		reg:      reg,
 		events:   events,
 		logs:     logs,
+		qr:       qr,
 		regsRepo: regsRepo,
 		db:       db,
 		log:      log.With("handler", "my_registration"),
@@ -85,8 +87,8 @@ func (h *MyRegistrationHandler) OnCallback(ctx context.Context, upd *schemes.Mes
 		regID := p.ArgInt64(0)
 		h.onToggleNotif(ctx, chatID, userMaxID, regID)
 	case "qr":
-		// День 15.
-		h.sendText(ctx, chatID, messages.QRNotAvailable())
+		regID := p.ArgInt64(0)
+		h.onShowQR(ctx, chatID, userMaxID, regID)
 	default:
 		h.log.Debug("unknown my action", "action", p.Action)
 		h.sendFallback(ctx, chatID)
@@ -130,6 +132,14 @@ func (h *MyRegistrationHandler) onShow(ctx context.Context, chatID, userMaxID in
 	// Для каждой регистрации подгружаем event (не оптимально — N+1, но
 	// у пользователя обычно 1-3 активные записи, так что норм).
 	for _, r := range regs {
+		if r.Status == domain.RegStatusRegistered && h.qr != nil && h.regsRepo != nil && h.db != nil &&
+			(r.AttendanceCode == nil || *r.AttendanceCode == "") {
+			if _, code, err := ensureAttendanceCode(ctx, h.regsRepo, h.db, h.qr, r.ID); err != nil {
+				h.log.Warn("my show: prepare attendance code failed", "err", err, "reg_id", r.ID)
+			} else {
+				r.AttendanceCode = &code
+			}
+		}
 		ev, err := h.events.Get(ctx, r.EventID)
 		if err != nil {
 			h.log.Warn("my show: get event failed", "err", err, "event_id", r.EventID)
@@ -143,6 +153,51 @@ func (h *MyRegistrationHandler) onShow(ctx context.Context, chatID, userMaxID in
 		if err := h.api.SendTextWithKeyboard(ctx, chatID, text, kb); err != nil {
 			h.log.Error("send my reg failed", "err", err)
 		}
+	}
+}
+
+func (h *MyRegistrationHandler) onShowQR(ctx context.Context, chatID, userMaxID, regID int64) {
+	if regID <= 0 || h.qr == nil || h.regsRepo == nil || h.db == nil {
+		h.sendText(ctx, chatID, messages.QRNotAvailable())
+		return
+	}
+
+	user, err := h.users.GetByMaxID(ctx, userMaxID)
+	if err != nil || user == nil {
+		h.log.Error("show qr: get user failed", "err", err, "user_id", userMaxID)
+		h.sendError(ctx, chatID)
+		return
+	}
+
+	regs, err := h.reg.ListActiveByUser(ctx, user.ID)
+	if err != nil {
+		h.log.Error("show qr: list failed", "err", err, "user_id", userMaxID)
+		h.sendError(ctx, chatID)
+		return
+	}
+
+	var targetReg *domain.Registration
+	for _, r := range regs {
+		if r.ID == regID {
+			targetReg = r
+			break
+		}
+	}
+	if targetReg == nil || targetReg.Status != domain.RegStatusRegistered {
+		h.sendText(ctx, chatID, messages.QRNotAvailable())
+		return
+	}
+
+	ev, err := h.events.Get(ctx, targetReg.EventID)
+	if err != nil || ev == nil {
+		h.log.Error("show qr: get event failed", "err", err, "event_id", targetReg.EventID)
+		h.sendError(ctx, chatID)
+		return
+	}
+
+	if err := deliverRegistrationQRCode(ctx, h.api, h.qr, h.regsRepo, h.db, h.log, chatID, regID, ev); err != nil {
+		h.log.Error("show qr: delivery failed", "err", err, "reg_id", regID)
+		h.sendError(ctx, chatID)
 	}
 }
 

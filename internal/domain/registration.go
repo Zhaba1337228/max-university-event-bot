@@ -47,6 +47,15 @@ type Registration struct {
 	UpdatedAt             time.Time
 }
 
+const ShortAttendanceCodeLen = 8
+
+func ShortAttendanceCode(code string) string {
+	if len(code) <= ShortAttendanceCodeLen {
+		return code
+	}
+	return code[:ShortAttendanceCodeLen]
+}
+
 // IsActive сообщает, является ли запись «живой» (registered либо waitlist).
 func (s RegistrationStatus) IsActive() bool {
 	return s == RegStatusRegistered || s == RegStatusWaitlist

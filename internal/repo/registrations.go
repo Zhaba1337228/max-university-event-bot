@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -80,9 +81,14 @@ func (r *registrationsRepo) Get(ctx context.Context, q Querier, id int64) (*doma
 }
 
 func (r *registrationsRepo) GetByCode(ctx context.Context, q Querier, code string) (*domain.Registration, error) {
-	const stmt = `SELECT ` + regColumns + ` FROM registrations WHERE attendance_code = $1`
+	code = strings.ToLower(strings.TrimSpace(code))
+	stmt := `SELECT ` + regColumns + ` FROM registrations WHERE attendance_code = $1`
+	args := []any{code}
+	if len(code) > 0 && len(code) < 32 {
+		stmt = `SELECT ` + regColumns + ` FROM registrations WHERE attendance_code LIKE $1 || '%' ORDER BY created_at DESC LIMIT 1`
+	}
 	reg := &domain.Registration{}
-	if err := scanRegistration(q.QueryRow(ctx, stmt, code), reg); err != nil {
+	if err := scanRegistration(q.QueryRow(ctx, stmt, args...), reg); err != nil {
 		if IsNoRows(err) {
 			return nil, nil
 		}

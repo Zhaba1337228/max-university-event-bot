@@ -4,11 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 
-	maxbot "github.com/max-messenger/max-bot-api-client-go"
 	"github.com/max-messenger/max-bot-api-client-go/schemes"
 
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/callbacks"
@@ -276,10 +273,11 @@ func (h *RegistrationHandler) onConfirm(ctx context.Context, chatID, userMaxID i
 
 	// Получаем attendance_code для отображения пользователю (TZ §2: код записи).
 	var attendanceCode string
-	if h.regsRepo != nil && h.db != nil {
-		reg, _ := h.regsRepo.Get(ctx, h.db, res.RegistrationID)
-		if reg != nil && reg.AttendanceCode != nil {
-			attendanceCode = *reg.AttendanceCode
+	if h.qr != nil && h.regsRepo != nil && h.db != nil {
+		if _, code, err := ensureAttendanceCode(ctx, h.regsRepo, h.db, h.qr, res.RegistrationID); err != nil {
+			h.log.Warn("prepare attendance code failed", "err", err, "reg_id", res.RegistrationID)
+		} else {
+			attendanceCode = code
 		}
 	}
 
@@ -305,49 +303,8 @@ func (h *RegistrationHandler) onConfirm(ctx context.Context, chatID, userMaxID i
 // Если что-то пошло не так — логируем и продолжаем; пользователь уже получил
 // текстовое подтверждение, отсутствие QR не блокирует регистрацию.
 func (h *RegistrationHandler) sendQRCode(ctx context.Context, chatID, regID int64, event *domain.Event) {
-	reg, err := h.regsRepo.Get(ctx, h.db, regID)
-	if err != nil || reg == nil {
-		h.log.Warn("qr: get reg failed", "err", err, "reg_id", regID)
-		return
-	}
-
-	var code string
-	if reg.AttendanceCode != nil && *reg.AttendanceCode != "" {
-		code = *reg.AttendanceCode
-	} else {
-		code = h.qr.NewAttendanceCode()
-		if err := h.regsRepo.SetAttendanceCode(ctx, h.db, regID, code); err != nil {
-			h.log.Error("qr: set attendance_code failed", "err", err)
-			return
-		}
-	}
-
-	payload := h.qr.BuildQRPayload(reg.EventID, code)
-	png, err := h.qr.GenerateQRPNG(payload)
-	if err != nil {
-		h.log.Error("qr: generate png failed", "err", err)
-		return
-	}
-
-	fname := filepath.Join(os.TempDir(), "max_qr_"+code+".png")
-	if err := os.WriteFile(fname, png, 0o600); err != nil {
-		h.log.Error("qr: write tmp failed", "err", err)
-		return
-	}
-	defer func() { _ = os.Remove(fname) }()
-
-	photo, err := h.api.Raw().Uploads.UploadPhotoFromFile(ctx, fname)
-	if err != nil {
-		h.log.Error("qr: upload failed", "err", err)
-		return
-	}
-
-	msg := maxbot.NewMessage().SetChat(chatID).
-		SetText(messages.QRCaption(event)).
-		AddPhoto(photo)
-
-	if _, err := h.api.Raw().Messages.SendWithResult(ctx, msg); err != nil {
-		h.log.Warn("qr: send photo failed", "err", err)
+	if err := deliverRegistrationQRCode(ctx, h.api, h.qr, h.regsRepo, h.db, h.log, chatID, regID, event); err != nil {
+		h.log.Warn("qr delivery failed", "err", err, "reg_id", regID)
 	}
 }
 

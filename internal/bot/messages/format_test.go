@@ -227,3 +227,40 @@ func TestNoEmojiInWelcome(t *testing.T) {
 		}
 	}
 }
+
+func TestMyRegistrationShowsShortCode(t *testing.T) {
+	t.Parallel()
+
+	code := "deadbeefcafebabefeedface12345678"
+	ev := &domain.Event{
+		Title:    "День открытых дверей",
+		StartsAt: time.Now(),
+		Location: "Главный корпус",
+	}
+	reg := &domain.Registration{
+		Status:         domain.RegStatusRegistered,
+		AttendanceCode: &code,
+	}
+
+	got := messages.MyRegistration(ev, reg)
+	if !strings.Contains(got, "Код записи: deadbeef") {
+		t.Errorf("MyRegistration missing short code in:\n%s", got)
+	}
+	if strings.Contains(got, code) && !strings.Contains(got, "Код записи: deadbeef") {
+		t.Errorf("MyRegistration should show short code, got:\n%s", got)
+	}
+}
+
+func TestQRCaptionShowsShortCode(t *testing.T) {
+	t.Parallel()
+
+	ev := &domain.Event{
+		Title:    "День открытых дверей",
+		StartsAt: time.Now(),
+		Location: "Главный корпус",
+	}
+	got := messages.QRCaption(ev, "deadbeefcafebabefeedface12345678")
+	if !strings.Contains(got, "Код записи: deadbeef") {
+		t.Errorf("QRCaption missing short code in:\n%s", got)
+	}
+}

@@ -18,6 +18,7 @@ func regCols() []string {
 		"full_name_snapshot", "contact_snapshot", "waitlist_position",
 		"registered_at", "cancelled_at", "source",
 		"attendance_code", "checkin_at", "checkin_by", "qr_sent_message_id",
+		"notifications_disabled",
 		"created_at", "updated_at",
 	}
 }
@@ -214,12 +215,12 @@ func TestRegListByEventAllStatuses(t *testing.T) {
 		AddRow(int64(1), int64(10), int64(5), "registered", (*string)(nil),
 			"User A", "+79991110000", (*int)(nil),
 			&now, (*time.Time)(nil), "bot",
-			(*string)(nil), (*time.Time)(nil), (*int64)(nil), (*int64)(nil),
+			(*string)(nil), (*time.Time)(nil), (*int64)(nil), (*int64)(nil), false,
 			now, now).
 		AddRow(int64(2), int64(11), int64(5), "cancelled_by_user", (*string)(nil),
 			"User B", "userb@x.com", (*int)(nil),
 			&now, &now, "bot",
-			(*string)(nil), (*time.Time)(nil), (*int64)(nil), (*int64)(nil),
+			(*string)(nil), (*time.Time)(nil), (*int64)(nil), (*int64)(nil), false,
 			now, now)
 
 	mock.ExpectQuery(`FROM registrations WHERE event_id = \$1\s+ORDER BY`).
@@ -253,6 +254,33 @@ func TestRegSetAttendanceCode(t *testing.T) {
 	}
 }
 
+func TestRegGetByCodeSupportsShortPrefix(t *testing.T) {
+	t.Parallel()
+	mock := newMockRegex(t)
+	regs := repo.NewRegistrations()
+
+	now := time.Now()
+	regAt := now
+	rows := pgxmock.NewRows(regCols()).
+		AddRow(int64(11), int64(1), int64(2), "registered", (*string)(nil),
+			"Test", "test@x.com", (*int)(nil),
+			&regAt, (*time.Time)(nil), "bot",
+			pStr("deadbeefdeadbeefdeadbeefdeadbeef"), (*time.Time)(nil), (*int64)(nil), (*int64)(nil), false,
+			now, now)
+
+	mock.ExpectQuery(`attendance_code LIKE \$1 \|\| '%'`).
+		WithArgs("deadbeef").
+		WillReturnRows(rows)
+
+	r, err := regs.GetByCode(context.Background(), mock, "deadbeef")
+	if err != nil {
+		t.Fatalf("GetByCode short prefix: %v", err)
+	}
+	if r == nil || r.ID != 11 {
+		t.Errorf("want id=11, got %+v", r)
+	}
+}
+
 func TestRegGetByCodeForUpdate(t *testing.T) {
 	t.Parallel()
 	mock := newMockRegex(t)
@@ -265,7 +293,7 @@ func TestRegGetByCodeForUpdate(t *testing.T) {
 		AddRow(int64(11), int64(1), int64(2), "registered", (*string)(nil),
 			"Test", "test@x.com", (*int)(nil),
 			&regAt, (*time.Time)(nil), "bot",
-			pStr("deadbeef"), (*time.Time)(nil), (*int64)(nil), (*int64)(nil),
+			pStr("deadbeef"), (*time.Time)(nil), (*int64)(nil), (*int64)(nil), false,
 			now, now)
 
 	mock.ExpectQuery(`attendance_code = \$1 FOR UPDATE`).

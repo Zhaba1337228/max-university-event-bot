@@ -255,7 +255,7 @@ func RegConfirmation(e *domain.Event, ctxFSM fsm.UserFSMContext) string {
 func RegSuccess(e *domain.Event, attendanceCode string) string {
 	codeStr := ""
 	if attendanceCode != "" {
-		codeStr = "\nКод записи: " + attendanceCode
+		codeStr = "\nКод записи: " + domain.ShortAttendanceCode(attendanceCode)
 	}
 	return joinLines(
 		"Вы записаны на мероприятие.",
@@ -329,6 +329,9 @@ func MyRegistration(e *domain.Event, r *domain.Registration) string {
 	if r.Status == domain.RegStatusWaitlist && r.WaitlistPosition != nil {
 		lines = append(lines, fmt.Sprintf("Место в очереди: %d", *r.WaitlistPosition))
 	}
+	if r.AttendanceCode != nil && *r.AttendanceCode != "" {
+		lines = append(lines, "Код записи: "+domain.ShortAttendanceCode(*r.AttendanceCode))
+	}
 	if r.InterestProgram != nil && *r.InterestProgram != "" {
 		lines = append(lines, "Направление: "+*r.InterestProgram)
 	}
@@ -384,17 +387,23 @@ func CancelLate() string {
 // =============================================================================
 
 // QRCaption — подпись к PNG с QR-кодом, который бот шлёт после записи.
-func QRCaption(e *domain.Event) string {
-	return joinLines(
+func QRCaption(e *domain.Event, attendanceCode string) string {
+	lines := []string{
 		"Ваш QR-код для прохода на мероприятие.",
 		"",
-		"Мероприятие: "+e.Title,
-		"Когда: "+FormatDateTime(e.StartsAt),
-		"Где: "+e.Location,
+		"Мероприятие: " + e.Title,
+		"Когда: " + FormatDateTime(e.StartsAt),
+		"Где: " + e.Location,
+	}
+	if attendanceCode != "" {
+		lines = append(lines, "Код записи: "+domain.ShortAttendanceCode(attendanceCode))
+	}
+	lines = append(lines,
 		"",
 		"Покажите этот QR-код организатору на входе.",
 		"Если потеряете - используйте кнопку «Показать мой QR» в разделе «Моя запись».",
 	)
+	return joinLines(lines...)
 }
 
 // QRNotAvailable — попытка получить QR, когда нет активной записи.
