@@ -1,141 +1,187 @@
-# Деплой и автодеплой
+# Деплой
 
-## Быстрый старт (с нуля до работающего сервера)
+Этот файл про продовое развёртывание проекта.
 
-### 1. Настроить сервер (один раз)
+Важно: для open-source репозитория **ничего не нужно отдельно "придумывать" для CI/CD**.  
+В репе уже лежат GitHub Actions:
 
-На чистом Ubuntu 22.04/24.04 VPS от **root**:
+- `.github/workflows/ci.yml` — проверки, тесты, линтеры, сборка;
+- `.github/workflows/deploy.yml` — автодеплой, если в репозитории настроены secrets.
+
+То есть базовый сценарий такой:
+
+- хочешь просто пользоваться проектом или форкнуть его — достаточно ручного деплоя;
+- хочешь автодеплой по `push` в `main` — просто добавляешь secrets, workflow уже готов;
+- если secrets не настроены, автодеплой сам по себе не нужен и ничего дополнительно редактировать не надо.
+
+## Быстрый старт
+
+### 1. Подготовить сервер
+
+На чистом Ubuntu 22.04/24.04:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Zhaba1337228/max-university-event-bot/main/scripts/setup-server.sh | bash
 ```
 
-Скрипт сам:
-- установит Docker + Docker Compose
-- создаст пользователя `deploy` с доступом к Docker
-- настроит UFW (открыты только 22, 80, 443)
-- включит fail2ban (защита SSH) и автоматические security-обновления
-- склонирует репозиторий в `/opt/app`
-- **сгенерирует и выведет SSH-ключ** для GitHub Actions
+Скрипт:
 
-### 2. Добавить секреты в GitHub
+- установит Docker и Docker Compose;
+- настроит базовую защиту сервера;
+- создаст рабочую директорию `/opt/app`;
+- склонирует репозиторий;
+- подготовит пользователя `deploy`;
+- при желании сразу подготовит SSH-ключ под GitHub Actions.
 
-В конце скрипта будет выведен приватный ключ. Добавь его в репозиторий:
-
-**GitHub → Settings → Secrets and variables → Actions → New repository secret**
-
-| Имя секрета | Значение |
-|-------------|----------|
-| `DEPLOY_HOST` | IP-адрес сервера, например `185.10.20.30` |
-| `DEPLOY_USER` | `deploy` |
-| `DEPLOY_PORT` | `22` |
-| `DEPLOY_KEY` | Приватный ключ из вывода скрипта (всё от `-----BEGIN` до `-----END`) |
-
-### 3. Заполнить .env.prod на сервере
-
-```bash
-ssh deploy@<IP>
-nano /opt/app/.env.prod
-```
-
-Минимум:
-```env
-DOMAIN=185.10.20.30          # IP или домен — всё остальное автоопределяется
-POSTGRES_PASSWORD=сильный_пароль
-MAX_BOT_TOKEN=токен_из_MAX
-ADMIN_SESSION_KEY=$(openssl rand -base64 32)
-# MAX_BOT_MODE — не трогай, авто: IP→longpoll, домен→webhook
-```
-
-### 4. Первый деплой вручную
-
-```bash
-ssh deploy@<IP>
-cd /opt/app && make deploy
-```
-
----
-
-## Автодеплой (GitHub Actions)
-
-После шагов выше — **каждый push в `main` автоматически деплоится**:
-
-```
-push → CI (test + lint + build) → build/push images → deploy (SSH → git pull → docker pull → up)
-```
-
-Пайплайн: `.github/workflows/deploy.yml`
-
-- CI должен пройти первым (`needs: ci`)
-- образы `app` и `web` публикуются в GHCR с тегами `main` и `${git_sha}`
-- сервер тянет образ ровно под текущий commit checkout, поэтому rollback через `git reset` не ломается
-- GitHub Actions перед деплоем логинится в GHCR на сервере, поэтому автодеплой работает и с приватными пакетами
-- Параллельные деплои блокируются (`concurrency`)
-- После деплоя проверяется `/healthz`
-- При падении выводится инструкция для ручного отката
-
-### Ручной деплой из GitHub Actions
-
-Вкладка **Actions → deploy → Run workflow**.
-
-### Откат
+### 2. Заполнить `.env.prod`
 
 ```bash
 ssh deploy@<IP>
 cd /opt/app
-git log --oneline -5          # найти нужный коммит
-git reset --hard abc1234       # откатиться
+cp deployments/.env.prod.example .env.prod
+nano .env.prod
+```
+
+Минимальный набор:
+
+```env
+DOMAIN=example.com
+POSTGRES_PASSWORD=strong-password
+MAX_BOT_TOKEN=token-from-max
+ADMIN_SESSION_KEY=long-random-string
+GIGACHAT_AUTH_KEY=...
+GIGACHAT_CLIENT_ID=...
+```
+
+Если домена ещё нет, можно временно указать IP:
+
+```env
+DOMAIN=1.2.3.4
+```
+
+### 3. Первый деплой вручную
+
+```bash
+ssh deploy@<IP>
+cd /opt/app
+make deploy
+```
+
+`make deploy`:
+
+- подтянет свежий git checkout;
+- попробует скачать готовые образы;
+- если образов нет или registry недоступен, соберёт локально;
+- перезапустит продовые контейнеры.
+
+Это основной и достаточный способ запуска. Для open-source проекта его хватает с головой.
+
+## GitHub Actions
+
+### Что уже есть в репе
+
+Без дополнительных правок уже настроены:
+
+- CI: тесты, race, coverage, `go vet`, `golangci-lint`, `next build`, миграции;
+- deploy workflow: сборка образов, push в GHCR и SSH-деплой на сервер.
+
+### Когда нужен автодеплой
+
+Автодеплой имеет смысл, если:
+
+- у тебя есть свой сервер;
+- ты хочешь, чтобы `push` в `main` сам выкатывался в прод;
+- ты готов хранить deploy secrets в GitHub repository settings.
+
+Если проект просто open-source и нужен только CI, **ничего менять в workflow не надо**.  
+Можно оставить всё как есть и просто не настраивать deploy secrets.
+
+### Какие secrets нужны для автодеплоя
+
+В GitHub:
+
+`Settings -> Secrets and variables -> Actions`
+
+Нужны:
+
+| Secret | Значение |
+| --- | --- |
+| `DEPLOY_HOST` | IP или домен сервера |
+| `DEPLOY_USER` | обычно `deploy` |
+| `DEPLOY_PORT` | обычно `22` |
+| `DEPLOY_KEY` | приватный SSH-ключ для входа на сервер |
+
+После этого `deploy.yml` начнёт работать без дополнительных правок.
+
+### Что делает deploy workflow
+
+Цепочка такая:
+
+```text
+push -> CI -> build/push images -> SSH deploy -> healthcheck
+```
+
+Конкретно:
+
+1. прогоняется `.github/workflows/ci.yml`;
+2. если всё зелёное, собираются образы `app` и `web`;
+3. образы публикуются в GHCR;
+4. по SSH запускается `scripts/deploy.sh --no-build`;
+5. после выката проверяется `/healthz`.
+
+## Откат
+
+Если нужен rollback:
+
+```bash
+ssh deploy@<IP>
+cd /opt/app
+git log --oneline -5
+git reset --hard <commit>
 make deploy-no-build
 ```
 
----
+## HTTPS
 
-## Архитектура сети (что открыто наружу)
+Когда появляется домен:
 
-```
-Интернет
-   │
-   ├── :80  (HTTP)  ──→ Caddy ──→ web:3000 (Next.js)
-   │                         └──→ bot:8080 (webhook)
-   │
-   ├── :443 (HTTPS) ──→ Caddy (только при домене, Let's Encrypt)
-   │
-   └── :22  (SSH)  ──→ только для деплоя
+1. укажи `A`-запись на IP сервера;
+2. обнови `.env.prod`:
 
-Закрыто снаружи:
-   bot:8081  (Admin REST API)  — только через Next.js rewrite
-   postgres:5432               — только внутри Docker-сети backend
+```env
+DOMAIN=bot.example.com
+MAX_BOT_WEBHOOK_URL=https://bot.example.com/webhook/max
+ADMIN_WEB_BASE_URL=https://bot.example.com
 ```
 
----
-
-## Переход на HTTPS (когда будет домен)
-
-1. Установить `A`-запись: `домен → IP сервера`
-2. В `.env.prod` обновить:
-   ```env
-   DOMAIN=bot.youruniversity.ru
-   MAX_BOT_WEBHOOK_URL=https://bot.youruniversity.ru/webhook/max
-   ADMIN_WEB_BASE_URL=https://bot.youruniversity.ru
-   ```
-3. `make deploy`
-
-Всё остальное — автоматически:
-- `deploy.sh` определяет домен → генерирует Caddy с HTTPS
-- `MAX_BOT_MODE` переключается на `webhook`
-- Порты 80+443 открываются
-- Caddy получает сертификат через Let's Encrypt
-
-Для возврата на IP — просто поставь `DOMAIN=1.2.3.4` и `make deploy`.
-
----
-
-## Makefile (шпаргалка)
+3. заново выполни:
 
 ```bash
-make deploy          # git pull + pull image + restart; если образа нет или нет GHCR auth, будет local build fallback
-make deploy-no-build # git pull + pull image + restart, без local build fallback
-make deploy-logs     # deploy + показать логи
-make prod-down       # остановить все контейнеры
-make prod-logs       # хвост логов всех сервисов
+make deploy
+```
+
+Дальше `deploy.sh` сам подготовит конфиг Caddy и включит HTTPS.
+
+## Что открыто наружу
+
+Снаружи нужны только:
+
+- `22` — SSH;
+- `80` — HTTP;
+- `443` — HTTPS.
+
+Не должны быть открыты наружу:
+
+- `5432` — PostgreSQL;
+- `8081` — admin API;
+- внутренние docker-сервисы.
+
+## Шпаргалка
+
+```bash
+make deploy
+make deploy-no-build
+make deploy-logs
+make prod-down
+make prod-logs
 ```
