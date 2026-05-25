@@ -85,6 +85,7 @@ func (s *Server) Run(ctx context.Context) error {
 	// Graceful shutdown при ctx.Done().
 	// context.Background() здесь намеренно — основной ctx уже отменён,
 	// а Shutdown нуждается в нескольких секундах на доводку in-flight запросов.
+	// #nosec G118 -- detached shutdown context is intentional for graceful shutdown after ctx cancellation.
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second) //nolint:gosec // G118: graceful shutdown требует независимый ctx

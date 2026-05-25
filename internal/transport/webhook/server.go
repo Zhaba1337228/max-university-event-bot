@@ -86,6 +86,7 @@ func (s *Server) Run(ctx context.Context) error {
 		IdleTimeout:       60 * time.Second,
 	}
 
+	// #nosec G118 -- detached shutdown context is intentional for graceful shutdown after ctx cancellation.
 	go func() {
 		<-ctx.Done()
 		shCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second) //nolint:gosec // G118: graceful shutdown

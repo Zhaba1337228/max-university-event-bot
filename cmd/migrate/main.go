@@ -1,19 +1,3 @@
-// Package main — CLI-обёртка вокруг goose для управления PostgreSQL-миграциями.
-//
-// Использование:
-//
-//	migrate up                  # применить все миграции
-//	migrate down                # откатить последнюю
-//	migrate down-to <version>   # откатить до указанной версии
-//	migrate redo                # переприменить последнюю миграцию
-//	migrate status              # показать состояние
-//	migrate version             # текущая версия
-//	migrate up-to <version>     # применить миграции до указанной версии
-//
-// DATABASE_URL — обязателен. Можно указать в окружении или в .env в корне проекта.
-//
-// Миграции встроены в бинарь (см. migrations/embed.go), поэтому утилита
-// работает из любой директории и не зависит от копирования файлов в Docker.
 package main
 
 import (
@@ -34,8 +18,6 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/migrations"
 )
 
-// usage — справка по командам.
-// nolint:gosec // G101: пример строки подключения, не настоящие credentials.
 const usage = `usage: migrate <command> [args]
 
 Commands:
@@ -51,8 +33,10 @@ Commands:
   create <name> <type>     create a new migration file (sql|go)
 
 Required env:
-  DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DBNAME?sslmode=disable
+  DATABASE_URL=(postgres connection string, for local use add sslmode=disable)
 `
+
+var errUsage = errors.New("usage")
 
 func main() {
 	if err := run(); err != nil {
@@ -65,10 +49,7 @@ func main() {
 	}
 }
 
-var errUsage = errors.New("usage")
-
 func run() error {
-	// .env опционален в проде, обязателен на dev для удобства.
 	_ = godotenv.Load()
 
 	if len(os.Args) < 2 {
@@ -116,8 +97,6 @@ func run() error {
 		}
 		return goose.RunContext(ctx, cmd, db, ".", args...)
 	case "create":
-		// goose create требует, чтобы FS была локальной (он пишет файл).
-		// Так что временно сбрасываем embed.FS — это создаст файл в ./migrations.
 		goose.SetBaseFS(nil)
 		if len(args) < 2 {
 			return fmt.Errorf("create requires <name> <type> (e.g. add_users sql)")

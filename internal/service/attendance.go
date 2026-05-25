@@ -167,7 +167,6 @@ func (s *attendanceService) CheckIn(ctx context.Context, scannerMaxUserID int64,
 
 func checkinWindowForEvent(ev *domain.Event) (time.Time, time.Time) {
 	windowStart := ev.StartsAt.Add(-checkinPreWindow)
-	windowEnd := ev.StartsAt.Add(checkinPostWindow)
 	if ev.EndsAt != nil {
 		return windowStart, ev.EndsAt.Add(checkinPostWindow)
 	}
@@ -179,8 +178,7 @@ func checkinWindowForEvent(ev *domain.Event) (time.Time, time.Time) {
 	if dayStartMSK.Before(windowStart) {
 		windowStart = dayStartMSK
 	}
-	windowEnd = dayStartMSK.Add(24*time.Hour + checkinPostWindow)
-	return windowStart, windowEnd
+	return windowStart, dayStartMSK.Add(24*time.Hour + checkinPostWindow)
 }
 
 func mustLoadAttendanceLocation(name string) *time.Location {

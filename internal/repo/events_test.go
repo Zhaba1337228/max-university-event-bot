@@ -72,6 +72,7 @@ func TestEventsGetReturnsEvent(t *testing.T) {
 	}
 	if ev == nil {
 		t.Fatal("got nil event")
+		return
 	}
 	if ev.Format != domain.EventFormatOnline {
 		t.Errorf("format: want online, got %s", ev.Format)
