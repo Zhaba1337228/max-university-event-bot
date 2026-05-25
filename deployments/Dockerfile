@@ -36,16 +36,11 @@ RUN apk add --no-cache ca-certificates tzdata && \
     update-ca-certificates && \
     adduser -D -H -u 10001 app
 
-# Корневой и промежуточный сертификаты для GigaChat (Минцифры).
-COPY deployments/certs/russian_trusted_root_ca_pem.crt /usr/local/share/ca-certificates/russian_trusted_root_ca.crt
-COPY deployments/certs/russian_trusted_sub_ca_pem.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt
-RUN update-ca-certificates
-
 WORKDIR /app
+RUN mkdir -p /app/certs
 COPY --from=builder /out/bot     /app/bot
 COPY --from=builder /out/migrate /app/migrate
 COPY migrations                  /app/migrations
-COPY deployments/certs/gigachat_ca_bundle.crt /app/certs/gigachat_ca_bundle.crt
 
 ENV TZ=Europe/Moscow
 USER app

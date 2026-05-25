@@ -79,6 +79,8 @@ services:
       - ../.env.prod
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    volumes:
+      - ${GIGACHAT_CA_BUNDLE_HOST_DIR:-/opt/app/secrets/gigachat}:/app/certs:ro
     networks:
       - backend
       - frontend

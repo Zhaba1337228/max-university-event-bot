@@ -17,6 +17,8 @@ deployments/.env.prod  # алиас
 
 # Generated at deploy time by deploy.sh
 deployments/Caddyfile.gen
+deployments/certs/
+.secrets/
 
 # Coverage
 *.coverprofile
