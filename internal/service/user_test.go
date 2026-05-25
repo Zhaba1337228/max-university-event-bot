@@ -54,7 +54,7 @@ func TestUserSetRole_OK(t *testing.T) {
 		},
 	}
 	svc := service.NewUser(nil, users, logs)
-	u, err := svc.SetRole(context.Background(), 1 /*actor*/, 42 /*target*/, domain.RoleOrganizer)
+	u, err := svc.SetRole(context.Background(), 1 /*actor*/, domain.RoleAdmin, 42 /*target*/, domain.RoleOrganizer)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestUserSetRole_OK(t *testing.T) {
 func TestUserSetRole_InvalidRole(t *testing.T) {
 	t.Parallel()
 	svc := service.NewUser(nil, &mockUserRepo{}, &mockActionLogRepo{})
-	_, err := svc.SetRole(context.Background(), 1, 42, domain.Role("bogus"))
+	_, err := svc.SetRole(context.Background(), 1, domain.RoleAdmin, 42, domain.Role("bogus"))
 	if !errors.Is(err, service.ErrUserInvalidRole) {
 		t.Errorf("want ErrUserInvalidRole, got %v", err)
 	}
@@ -81,7 +81,7 @@ func TestUserSetRole_InvalidRole(t *testing.T) {
 func TestUserSetRole_CannotChangeSelf(t *testing.T) {
 	t.Parallel()
 	svc := service.NewUser(nil, &mockUserRepo{}, &mockActionLogRepo{})
-	_, err := svc.SetRole(context.Background(), 42, 42, domain.RoleApplicant)
+	_, err := svc.SetRole(context.Background(), 42, domain.RoleAdmin, 42, domain.RoleApplicant)
 	if !errors.Is(err, service.ErrUserCannotChangeSelf) {
 		t.Errorf("want ErrUserCannotChangeSelf, got %v", err)
 	}
@@ -93,7 +93,7 @@ func TestUserSetRole_NotFound(t *testing.T) {
 		getByIDFunc: func(_ int64) (*domain.User, error) { return nil, nil },
 	}
 	svc := service.NewUser(nil, users, &mockActionLogRepo{})
-	_, err := svc.SetRole(context.Background(), 1, 999, domain.RoleAdmin)
+	_, err := svc.SetRole(context.Background(), 1, domain.RoleAdmin, 999, domain.RoleAdmin)
 	if !errors.Is(err, service.ErrUserNotFound) {
 		t.Errorf("want ErrUserNotFound, got %v", err)
 	}
@@ -108,11 +108,62 @@ func TestUserSetRole_NoChange_NoAuditLog(t *testing.T) {
 		},
 	}
 	svc := service.NewUser(nil, users, logs)
-	_, err := svc.SetRole(context.Background(), 1, 42, domain.RoleStaff)
+	_, err := svc.SetRole(context.Background(), 1, domain.RoleAdmin, 42, domain.RoleStaff)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if len(logs.appendCalls) != 0 {
 		t.Errorf("audit log must not be written when role unchanged; got %d entries", len(logs.appendCalls))
+	}
+}
+
+func TestUserSetRole_OrganizerCanManageVolunteer(t *testing.T) {
+	t.Parallel()
+
+	users := &mockUserRepo{
+		getByIDFunc: func(id int64) (*domain.User, error) {
+			return &domain.User{ID: id, Role: domain.RoleApplicant}, nil
+		},
+	}
+	svc := service.NewUser(nil, users, &mockActionLogRepo{})
+
+	u, err := svc.SetRole(context.Background(), 7, domain.RoleOrganizer, 42, domain.RoleStaff)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if u.Role != domain.RoleStaff {
+		t.Errorf("want role=staff, got %s", u.Role)
+	}
+}
+
+func TestUserSetRole_OrganizerCannotPromoteOrganizer(t *testing.T) {
+	t.Parallel()
+
+	users := &mockUserRepo{
+		getByIDFunc: func(id int64) (*domain.User, error) {
+			return &domain.User{ID: id, Role: domain.RoleApplicant}, nil
+		},
+	}
+	svc := service.NewUser(nil, users, &mockActionLogRepo{})
+
+	_, err := svc.SetRole(context.Background(), 7, domain.RoleOrganizer, 42, domain.RoleOrganizer)
+	if !errors.Is(err, service.ErrUserRoleChangeDenied) {
+		t.Errorf("want ErrUserRoleChangeDenied, got %v", err)
+	}
+}
+
+func TestUserSetRole_OrganizerCannotTouchAdmin(t *testing.T) {
+	t.Parallel()
+
+	users := &mockUserRepo{
+		getByIDFunc: func(id int64) (*domain.User, error) {
+			return &domain.User{ID: id, Role: domain.RoleAdmin}, nil
+		},
+	}
+	svc := service.NewUser(nil, users, &mockActionLogRepo{})
+
+	_, err := svc.SetRole(context.Background(), 7, domain.RoleOrganizer, 99, domain.RoleStaff)
+	if !errors.Is(err, service.ErrUserRoleChangeDenied) {
+		t.Errorf("want ErrUserRoleChangeDenied, got %v", err)
 	}
 }

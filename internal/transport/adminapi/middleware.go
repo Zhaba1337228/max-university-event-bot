@@ -45,14 +45,22 @@ func claimsFromContext(ctx context.Context) (*service.Claims, bool) {
 	return c, ok
 }
 
-// requireAdmin — пускает только admin'ов (роль из JWT session claims).
+// requireRoles — пускает только перечисленные роли (роль из JWT session claims).
 // Ставится поверх requireSession.
-func requireAdmin() func(http.Handler) http.Handler {
+func requireRoles(allowed ...domain.Role) func(http.Handler) http.Handler {
+	allowedSet := make(map[domain.Role]struct{}, len(allowed))
+	for _, role := range allowed {
+		allowedSet[role] = struct{}{}
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			c, ok := claimsFromContext(r.Context())
-			if !ok || c.Role != domain.RoleAdmin {
-				writeJSON(w, http.StatusForbidden, errResp("admin_required", "Раздел доступен только администраторам"))
+			if !ok {
+				writeJSON(w, http.StatusForbidden, errResp("role_required", "Недостаточно прав"))
+				return
+			}
+			if _, ok := allowedSet[c.Role]; !ok {
+				writeJSON(w, http.StatusForbidden, errResp("role_required", "Недостаточно прав"))
 				return
 			}
 			next.ServeHTTP(w, r)

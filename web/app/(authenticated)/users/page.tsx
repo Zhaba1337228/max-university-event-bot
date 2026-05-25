@@ -18,7 +18,8 @@ import {
   IconArrowRight,
 } from "@/components/ui/icons";
 
-const ROLES: Role[] = ["applicant", "organizer", "staff", "admin"];
+const ADMIN_ROLES: Role[] = ["applicant", "organizer", "staff", "admin"];
+const ORGANIZER_ROLES: Role[] = ["applicant", "staff"];
 const PAGE_SIZE = 50;
 
 // Role badge styles
@@ -47,6 +48,9 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [savingID, setSavingID] = useState<number | null>(null);
+
+  const managerRole = me.user.role;
+  const availableRoles = managerRole === "organizer" ? ORGANIZER_ROLES : ADMIN_ROLES;
 
   async function load(o = offset, r = roleFilter, q = query) {
     setLoading(true);
@@ -114,6 +118,34 @@ export default function UsersPage() {
     [me],
   );
 
+  const canEditUser = useMemo(
+    () => (u: UserListItem) => {
+      if (isMyself(u.id)) return false;
+      if (managerRole === "admin") return true;
+      return u.role === "applicant" || u.role === "staff";
+    },
+    [isMyself, managerRole],
+  );
+
+  const roleHint = useMemo(
+    () => (u: UserListItem) => {
+      if (isMyself(u.id)) return "(вы сами — смена недоступна)";
+      if (managerRole === "organizer" && !canEditUser(u)) {
+        return "(эту роль меняет только администратор)";
+      }
+      return null;
+    },
+    [canEditUser, isMyself, managerRole],
+  );
+
+  const roleOptions = useMemo(
+    () => (u: UserListItem) => {
+      if (canEditUser(u)) return availableRoles;
+      return [u.role];
+    },
+    [availableRoles, canEditUser],
+  );
+
   function onSearch(e: React.FormEvent) {
     e.preventDefault();
     setOffset(0);
@@ -126,7 +158,9 @@ export default function UsersPage() {
         <div>
           <h1 className="text-2xl font-bold">Пользователи</h1>
           <p className="mt-1 text-sm text-subtle">
-            Управление ролями. Только для администраторов — изменения попадают в audit log.
+            {managerRole === "admin"
+              ? "Управление ролями. Изменения сразу попадают в audit log."
+              : "Назначение и снятие роли волонтёра. Организатор может переводить applicant ↔ staff; изменения попадают в audit log."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -155,7 +189,7 @@ export default function UsersPage() {
             <div className="relative flex-1">
               <IconSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
               <Input
-                placeholder="Поиск по ФИО, телефону или email"
+                placeholder="Поиск по MAX ID, ФИО, телефону или email"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="pl-8"
@@ -172,7 +206,7 @@ export default function UsersPage() {
               className="rounded-md border border-border bg-muted/70 px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-accent/30 sm:w-44"
             >
               <option value="">Все роли</option>
-              {ROLES.map((r) => (
+              {availableRoles.map((r) => (
                 <option key={r} value={r}>
                   {roleLabel(r) || r}
                 </option>
@@ -195,7 +229,7 @@ export default function UsersPage() {
             >
               Все
             </button>
-            {ROLES.map((r) => (
+            {availableRoles.map((r) => (
               <button
                 key={r}
                 type="button"
@@ -254,11 +288,12 @@ export default function UsersPage() {
                     <div className="mt-3">
                       <RoleSelect
                         value={u.role}
-                        disabled={savingID === u.id || isMyself(u.id)}
+                        options={roleOptions(u)}
+                        disabled={savingID === u.id || !canEditUser(u)}
                         onChange={(r) => setUserRole(u, r)}
                       />
-                      {isMyself(u.id) && (
-                        <p className="mt-1 text-xs text-subtle">(вы сами — смена недоступна)</p>
+                      {roleHint(u) && (
+                        <p className="mt-1 text-xs text-subtle">{roleHint(u)}</p>
                       )}
                     </div>
                     <div className="mt-2 text-xs text-subtle">
@@ -310,9 +345,13 @@ export default function UsersPage() {
                           <div className="flex flex-col gap-1">
                             <RoleSelect
                               value={u.role}
-                              disabled={savingID === u.id || isMyself(u.id)}
+                              options={roleOptions(u)}
+                              disabled={savingID === u.id || !canEditUser(u)}
                               onChange={(r) => setUserRole(u, r)}
                             />
+                            {roleHint(u) && (
+                              <span className="text-[11px] text-subtle">{roleHint(u)}</span>
+                            )}
                           </div>
                         </td>
                         <td className="py-2.5 pr-3 font-mono text-xs text-subtle">
@@ -372,10 +411,12 @@ export default function UsersPage() {
 
 function RoleSelect({
   value,
+  options,
   disabled,
   onChange,
 }: {
   value: Role;
+  options: Role[];
   disabled: boolean;
   onChange: (r: Role) => void;
 }) {
@@ -390,7 +431,7 @@ function RoleSelect({
           : `border-border bg-muted/70 text-text hover:bg-muted ${roleBadge[value]}`
       }`}
     >
-      {ROLES.map((r) => (
+      {options.map((r) => (
         <option key={r} value={r}>
           {roleLabel(r) || r}
         </option>

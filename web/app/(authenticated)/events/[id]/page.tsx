@@ -114,7 +114,7 @@ export default function EventDetailPage() {
 
   const ev = data.event;
   const st = data.stats;
-  const filled = st ? st.registered - st.cancelled : 0;
+  const filled = st ? Math.max(0, ev.capacity - st.free_seats) : 0;
   const pct = ev.capacity > 0 && st ? Math.round((filled / ev.capacity) * 100) : 0;
   const isFull = pct >= 100;
   const canEdit = canEditEvent(me.user.role, me.user.id, ev.created_by);

@@ -161,7 +161,7 @@ func TestRegUpdateStatusSetsCancelledAt(t *testing.T) {
 UPDATE registrations
 SET status = $2,
     cancelled_at = CASE
-        WHEN $2 IN ('cancelled_by_user','cancelled_by_organizer') THEN NOW()
+        WHEN $2 IN ('cancelled_by_user','cancelled_by_organizer','late_cancel') THEN NOW()
         ELSE cancelled_at
     END,
     updated_at = NOW()

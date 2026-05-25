@@ -102,7 +102,7 @@ WHERE id = $1`
 }
 
 // List возвращает страницу пользователей. Если roleFilter != "" — фильтр по role.
-// query — case-insensitive подстрока по full_name / phone / email.
+// query — case-insensitive подстрока по full_name / phone / email / max_user_id.
 func (r *usersRepo) List(ctx context.Context, q Querier, roleFilter domain.Role, query string, limit, offset int) ([]*domain.User, int, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -149,7 +149,8 @@ WHERE ($1 = '' OR role = $1)
   AND ($2 = ''
        OR LOWER(COALESCE(full_name, '')) LIKE $3
        OR LOWER(COALESCE(phone, '')) LIKE $3
-       OR LOWER(COALESCE(email, '')) LIKE $3)`
+       OR LOWER(COALESCE(email, '')) LIKE $3
+       OR CAST(max_user_id AS text) LIKE $3)`
 	listStmt = `
 SELECT ` + userColumns + `
 FROM users
@@ -157,7 +158,8 @@ WHERE ($1 = '' OR role = $1)
   AND ($2 = ''
        OR LOWER(COALESCE(full_name, '')) LIKE $3
        OR LOWER(COALESCE(phone, '')) LIKE $3
-       OR LOWER(COALESCE(email, '')) LIKE $3)
+       OR LOWER(COALESCE(email, '')) LIKE $3
+       OR CAST(max_user_id AS text) LIKE $3)
 ORDER BY created_at DESC
 LIMIT $4 OFFSET $5`
 

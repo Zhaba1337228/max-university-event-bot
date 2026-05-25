@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api, HttpError } from "@/lib/api";
-import { Me } from "@/lib/types";
+import { Me, canManageUsers } from "@/lib/types";
 import { Nav } from "@/components/nav";
 import { MeContext } from "@/components/me-context";
 
@@ -67,9 +67,9 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
       return;
     }
 
-    // /users — только admin.
-    if (pathname.startsWith("/users") && role !== "admin") {
-      router.replace("/forbidden?reason=users_admin");
+    // /users — только organizer/admin.
+    if (pathname.startsWith("/users") && !canManageUsers(role)) {
+      router.replace("/forbidden?reason=users_roles");
       return;
     }
   }, [me, pathname, router]);
@@ -92,7 +92,7 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
   if (role === "organizer" && pathname.startsWith("/checkin")) {
     return <div className="container py-16 text-subtle">Перенаправляем…</div>;
   }
-  if (pathname.startsWith("/users") && role !== "admin") {
+  if (pathname.startsWith("/users") && !canManageUsers(role)) {
     return <div className="container py-16 text-subtle">Перенаправляем…</div>;
   }
 
@@ -105,4 +105,3 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
     </MeContext.Provider>
   );
 }
-

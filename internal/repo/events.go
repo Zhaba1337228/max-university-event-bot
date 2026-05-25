@@ -227,7 +227,7 @@ func (r *eventsRepo) Stats(ctx context.Context, q Querier, eventID int64) (*doma
 	const counts = `
 SELECT
   e.capacity,
-  COUNT(*) FILTER (WHERE r.status = 'registered')             AS registered,
+  COUNT(*) FILTER (WHERE r.status IN ('registered', 'attended')) AS registered,
   COUNT(*) FILTER (WHERE r.status IN ('cancelled_by_user','cancelled_by_organizer')) AS cancelled,
   COUNT(*) FILTER (WHERE r.status = 'waitlist')               AS waitlist,
   COUNT(*) FILTER (WHERE r.status = 'attended')               AS attended,
@@ -247,7 +247,7 @@ GROUP BY e.id, e.capacity`
 		}
 		return nil, fmt.Errorf("stats counts: %w", err)
 	}
-	stats.FreeSeats = stats.Capacity - stats.Registered - stats.Attended
+	stats.FreeSeats = stats.Capacity - stats.Registered
 	if stats.FreeSeats < 0 {
 		stats.FreeSeats = 0
 	}

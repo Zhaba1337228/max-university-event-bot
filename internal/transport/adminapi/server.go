@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Zhaba1337228/max-university-event-bot/internal/domain"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/repo"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 )
@@ -108,7 +109,7 @@ func (s *Server) Run(ctx context.Context) error {
 //  5. cors (только из ADMIN_WEB_BASE_URL)
 //  6. originGuard на mutating endpoints (внутри роутера)
 //  7. requireSession на /api (кроме /healthz, /auth/exchange)
-//  8. requireAdmin на /api/users (День 13 P1)
+//  8. requireRoles на /api/users (admin/organizer)
 func (s *Server) routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -157,9 +158,9 @@ func (s *Server) routes() http.Handler {
 		// Dashboard.
 		r.Get("/dashboard", s.handleDashboard)
 
-		// Users (admin-only).
-		r.With(requireAdmin()).Get("/users", s.handleListUsers)
-		r.With(requireAdmin()).Patch("/users/{id}/role", s.handleSetUserRole)
+		// Users / volunteers (admin + organizer).
+		r.With(requireRoles(domain.RoleAdmin, domain.RoleOrganizer)).Get("/users", s.handleListUsers)
+		r.With(requireRoles(domain.RoleAdmin, domain.RoleOrganizer)).Patch("/users/{id}/role", s.handleSetUserRole)
 	})
 
 	return r

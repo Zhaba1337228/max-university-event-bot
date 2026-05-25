@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, HttpError } from "@/lib/api";
-import { DashboardResp, EventDTO, ListEventsResp, roleLabel, canManageEvents } from "@/lib/types";
+import { DashboardResp, EventDTO, ListEventsResp, roleLabel, canManageEvents, canManageUsers } from "@/lib/types";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -292,21 +292,23 @@ export default function DashboardPage() {
                 label="Все мероприятия"
                 desc="Список и фильтры"
               />
-              {isAdmin && (
+              {canManageUsers(role) && (
                 <>
                   <QuickAction
                     href="/users"
                     icon={<IconUsers size={16} className="text-emerald-400" />}
-                    label="Пользователи"
-                    desc="Управление ролями"
-                  />
-                  <QuickAction
-                    href="/checkin"
-                    icon={<IconQr size={16} className="text-warn" />}
-                    label="Check-in"
-                    desc="Сканер QR-кодов"
+                    label={role === "organizer" ? "Волонтёры" : "Пользователи"}
+                    desc={role === "organizer" ? "Выдать или снять роль staff" : "Управление ролями"}
                   />
                 </>
+              )}
+              {isAdmin && (
+                <QuickAction
+                  href="/checkin"
+                  icon={<IconQr size={16} className="text-warn" />}
+                  label="Check-in"
+                  desc="Сканер QR-кодов"
+                />
               )}
             </CardBody>
           </Card>

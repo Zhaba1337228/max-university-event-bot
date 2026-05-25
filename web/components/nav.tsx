@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { Role, canCheckin, canManageEvents, roleLabel } from "@/lib/types";
+import { Role, canCheckin, canManageEvents, canManageUsers, roleLabel } from "@/lib/types";
 import clsx from "clsx";
 import {
   IconHome,
@@ -30,8 +30,12 @@ function tabsForRole(role: Role): Tab[] {
   if (canCheckin(role)) {
     out.push({ href: "/checkin", label: "Check-in", icon: <IconQr size={16} /> });
   }
-  if (role === "admin") {
-    out.push({ href: "/users", label: "Пользователи", icon: <IconUsers size={16} /> });
+  if (canManageUsers(role)) {
+    out.push({
+      href: "/users",
+      label: role === "organizer" ? "Волонтёры" : "Пользователи",
+      icon: <IconUsers size={16} />,
+    });
   }
   // Страница прав доступа видна всем аутентифицированным (кроме staff)
   if (canManageEvents(role)) {

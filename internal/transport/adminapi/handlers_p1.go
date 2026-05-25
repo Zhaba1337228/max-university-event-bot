@@ -217,10 +217,10 @@ func (s *Server) handleManualMark(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// --- USERS (admin only) ---
+// --- USERS / VOLUNTEERS ---
 
 // handleListUsers — GET /api/users?role=&query=&limit=&offset=.
-// Доступ: admin (middleware).
+// Доступ: admin и organizer (middleware).
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	roleFilter := domain.Role(strings.TrimSpace(q.Get("role")))
@@ -245,8 +245,8 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total})
 }
 
-// handleSetUserRole — PATCH /api/users/:id/role { "role": "organizer" }.
-// Доступ: admin (middleware).
+// handleSetUserRole — PATCH /api/users/:id/role { "role": "staff" }.
+// Доступ: admin и organizer (middleware).
 func (s *Server) handleSetUserRole(w http.ResponseWriter, r *http.Request) {
 	c, _ := claimsFromContext(r.Context())
 	targetID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -262,13 +262,19 @@ func (s *Server) handleSetUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	role := domain.Role(strings.TrimSpace(body.Role))
-	u, err := s.deps.Users.SetRole(r.Context(), c.UserID, targetID, role)
+	u, err := s.deps.Users.SetRole(r.Context(), c.UserID, c.Role, targetID, role)
 	switch {
 	case errors.Is(err, service.ErrUserInvalidRole):
 		writeJSON(w, http.StatusBadRequest, errResp("bad_role", "Неверная роль (допустимо: applicant, organizer, staff, admin)"))
 		return
 	case errors.Is(err, service.ErrUserCannotChangeSelf):
 		writeJSON(w, http.StatusBadRequest, errResp("self_change", "Нельзя менять собственную роль"))
+		return
+	case errors.Is(err, service.ErrUserRoleChangeDenied):
+		writeJSON(w, http.StatusForbidden, errResp("role_change_forbidden", "Организатор может выдавать и забирать только роль волонтёра"))
+		return
+	case errors.Is(err, service.ErrAccessDenied):
+		writeJSON(w, http.StatusForbidden, errResp("forbidden", "Недостаточно прав"))
 		return
 	case errors.Is(err, service.ErrUserNotFound):
 		writeJSON(w, http.StatusNotFound, errResp("user_not_found", "Пользователь не найден"))

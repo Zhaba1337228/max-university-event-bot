@@ -23,7 +23,7 @@ type UserRepo interface {
 	// UpdateProfile обновляет ФИО и контакт (телефон/email распознаются автоматически).
 	UpdateProfile(ctx context.Context, q Querier, id int64, fullName, contact *string) error
 
-	// SetRole меняет роль (для admin promote/demote).
+	// SetRole меняет роль пользователя.
 	SetRole(ctx context.Context, q Querier, id int64, role domain.Role) error
 
 	// GrantConsent фиксирует согласие на обработку ПДн с версией политики.

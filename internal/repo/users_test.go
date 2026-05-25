@@ -204,3 +204,35 @@ func TestUsersListWithRoleFilter(t *testing.T) {
 		t.Errorf("want role=organizer, got %s", got[0].Role)
 	}
 }
+
+func TestUsersListSearchesByMaxUserID(t *testing.T) {
+	t.Parallel()
+	mock := newMockRegex(t)
+	users := repo.NewUsers()
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users\s+WHERE \(\$1 = '' OR role = \$1\).*CAST\(max_user_id AS text\) LIKE \$3`).
+		WithArgs("", "2325", "%2325%").
+		WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(int(1)))
+
+	now := time.Now()
+	rows := pgxmock.NewRows([]string{
+		"id", "max_user_id", "full_name", "phone", "email", "role", "locale",
+		"consent_at", "consent_policy_ver", "created_at", "updated_at",
+	}).AddRow(int64(5), int64(232513363), nil, nil, nil, "staff", "ru",
+		nil, nil, now, now)
+
+	mock.ExpectQuery(`FROM users\s+WHERE \(\$1 = '' OR role = \$1\).*CAST\(max_user_id AS text\) LIKE \$3.*ORDER BY created_at DESC`).
+		WithArgs("", "2325", "%2325%", 50, 0).
+		WillReturnRows(rows)
+
+	got, total, err := users.List(context.Background(), mock, "", "2325", 50, 0)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if total != 1 || len(got) != 1 {
+		t.Fatalf("want total=1 / 1 row, got total=%d / %d rows", total, len(got))
+	}
+	if got[0].MaxUserID != 232513363 {
+		t.Errorf("want max_user_id=232513363, got %d", got[0].MaxUserID)
+	}
+}

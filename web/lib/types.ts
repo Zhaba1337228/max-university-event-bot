@@ -98,7 +98,7 @@ export function canUnmaskPII(role: Role): boolean {
 
 // canManageUsers — может ли пользователь управлять ролями других пользователей.
 export function canManageUsers(role: Role): boolean {
-  return role === "admin";
+  return role === "admin" || role === "organizer";
 }
 
 // RBAC матрица ответственностей по ролям (используется в /roles странице).
@@ -124,7 +124,7 @@ export const ROLE_CAPABILITIES: RoleCapability[] = [
   { key: "audit_log",       label: "Журнал действий",                 admin: true,  organizer: "own", staff: false, applicant: false },
   { key: "unmask_pii",      label: "Раскрытие ФИО / контактов (ПДн)", admin: true,  organizer: false, staff: false, applicant: false },
   { key: "checkin_qr",      label: "QR-сканер check-in на входе",     admin: true,  organizer: false, staff: true,  applicant: false },
-  { key: "manage_users",    label: "Управление ролями пользователей",  admin: true,  organizer: false, staff: false, applicant: false },
+  { key: "manage_users",    label: "Выдача роли волонтёра",            admin: true,  organizer: true,  staff: false, applicant: false },
 ];
 
 export type EventStats = {

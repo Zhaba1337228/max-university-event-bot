@@ -55,6 +55,7 @@ var (
 	ErrUserNotFound         = errors.New("user not found")
 	ErrUserInvalidRole      = errors.New("invalid role (allowed: applicant, organizer, staff, admin)")
 	ErrUserCannotChangeSelf = errors.New("admin cannot change own role")
+	ErrUserRoleChangeDenied = errors.New("actor cannot assign requested role")
 )
 
 // Manual attendance marking (web admin).

@@ -15,7 +15,7 @@ import (
 func eventCols() []string {
 	return []string{
 		"id", "title", "description", "short_summary", "starts_at", "ends_at",
-		"location", "format", "capacity", "status", "created_by", "tags",
+		"location", "format", "capacity", "status", "created_by", "tags", "late_cancel_allowed",
 		"created_at", "updated_at",
 	}
 }
@@ -39,7 +39,7 @@ func TestEventsCreate(t *testing.T) {
 
 	mock.ExpectQuery(`INSERT INTO events`).
 		WithArgs(ev.Title, ev.Description, (*string)(nil), starts, (*time.Time)(nil),
-			ev.Location, "offline", 50, "open", (*int64)(nil), []string{"x"}).
+			ev.Location, "offline", 50, "open", (*int64)(nil), []string{"x"}, false).
 		WillReturnRows(pgxmock.NewRows([]string{"id", "created_at", "updated_at"}).
 			AddRow(int64(42), time.Now(), time.Now()))
 
@@ -59,7 +59,7 @@ func TestEventsGetReturnsEvent(t *testing.T) {
 
 	rows := pgxmock.NewRows(eventCols()).
 		AddRow(int64(1), "Test", "Desc", nil, time.Now(), nil,
-			"loc", "online", 100, "open", nil, []string{"a"},
+			"loc", "online", 100, "open", nil, []string{"a"}, false,
 			time.Now(), time.Now())
 
 	mock.ExpectQuery(`SELECT id, title, description`).
@@ -123,7 +123,7 @@ func TestEventsStatsHappyPath(t *testing.T) {
 		WithArgs(int64(1)).
 		WillReturnRows(pgxmock.NewRows([]string{
 			"capacity", "registered", "cancelled", "waitlist", "attended", "no_show",
-		}).AddRow(100, 60, 5, 10, 7, 0))
+		}).AddRow(100, 67, 5, 10, 7, 0))
 
 	// 2) top interests
 	mock.ExpectQuery(`interest_program, COUNT`).
@@ -136,7 +136,7 @@ func TestEventsStatsHappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
-	if stats.Capacity != 100 || stats.Registered != 60 || stats.Attended != 7 || stats.FreeSeats != 33 {
+	if stats.Capacity != 100 || stats.Registered != 67 || stats.Attended != 7 || stats.FreeSeats != 33 {
 		t.Errorf("counts wrong: %+v", stats)
 	}
 	if stats.TopInterests["Прикладная информатика"] != 30 {

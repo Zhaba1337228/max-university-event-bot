@@ -34,10 +34,11 @@ type User interface {
 	// roleFilter == "" — без фильтра. query — case-insensitive подстрока.
 	List(ctx context.Context, roleFilter domain.Role, query string, limit, offset int) ([]*domain.User, int, error)
 
-	// SetRole меняет роль пользователя. Доступно только admin'у (проверка в handler).
+	// SetRole меняет роль пользователя.
+	// admin может назначать любые роли, organizer — только выдавать/забирать staff.
 	// actorID нужен для записи в action_log; newRole валидируется (applicant/organizer/staff/admin).
 	// Возвращает обновлённого пользователя.
-	SetRole(ctx context.Context, actorID, targetUserID int64, newRole domain.Role) (*domain.User, error)
+	SetRole(ctx context.Context, actorID int64, actorRole domain.Role, targetUserID int64, newRole domain.Role) (*domain.User, error)
 }
 
 type userService struct {
@@ -125,8 +126,9 @@ func (s *userService) List(ctx context.Context, roleFilter domain.Role, query st
 
 // SetRole меняет роль и пишет audit_log. Валидация:
 //   - newRole ∈ {applicant, organizer, staff, admin}
-//   - actor не может сам себя «понизить» из admin (защита от случайного локаута)
-func (s *userService) SetRole(ctx context.Context, actorID, targetUserID int64, newRole domain.Role) (*domain.User, error) {
+//   - actor не может менять собственную роль
+//   - organizer может назначать только staff <-> applicant
+func (s *userService) SetRole(ctx context.Context, actorID int64, actorRole domain.Role, targetUserID int64, newRole domain.Role) (*domain.User, error) {
 	if !isValidRole(newRole) {
 		return nil, ErrUserInvalidRole
 	}
@@ -139,6 +141,9 @@ func (s *userService) SetRole(ctx context.Context, actorID, targetUserID int64, 
 	}
 	if target == nil {
 		return nil, ErrUserNotFound
+	}
+	if err := validateRoleChange(actorRole, target.Role, newRole); err != nil {
+		return nil, err
 	}
 	if target.Role == newRole {
 		return target, nil
@@ -158,6 +163,24 @@ func (s *userService) SetRole(ctx context.Context, actorID, targetUserID int64, 
 
 	target.Role = newRole
 	return target, nil
+}
+
+func validateRoleChange(actorRole, currentRole, newRole domain.Role) error {
+	switch actorRole {
+	case domain.RoleAdmin:
+		return nil
+	case domain.RoleOrganizer:
+		if !isVolunteerRole(currentRole) || !isVolunteerRole(newRole) {
+			return ErrUserRoleChangeDenied
+		}
+		return nil
+	default:
+		return ErrAccessDenied
+	}
+}
+
+func isVolunteerRole(role domain.Role) bool {
+	return role == domain.RoleApplicant || role == domain.RoleStaff
 }
 
 func isValidRole(r domain.Role) bool {

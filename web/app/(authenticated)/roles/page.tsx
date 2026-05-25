@@ -30,8 +30,8 @@ const ROLE_OVERVIEW = [
     color: "border-l-blue-400 bg-gradient-to-r from-blue-500/8 to-transparent",
     iconBg: "bg-blue-500/15 text-blue-400",
     label: "Организатор",
-    desc: "Создаёт мероприятия и управляет только теми, которые создал сам. Данные участников видит в замаскированном виде.",
-    examples: ["Создаёт свои мероприятия", "Редактирует/закрывает только свои", "Видит и отмечает участников своих событий", "Делает рассылки по своим мероприятиям"],
+    desc: "Создаёт мероприятия и управляет только теми, которые создал сам. Данные участников видит в замаскированном виде и может выдавать роль волонтёра.",
+    examples: ["Создаёт свои мероприятия", "Редактирует/закрывает только свои", "Видит и отмечает участников своих событий", "Выдаёт и снимает роль волонтёра (staff)"],
   },
   {
     role: "staff" as const,
@@ -86,11 +86,10 @@ export default function RolesPage() {
       <div>
         <h1 className="text-2xl font-bold sm:text-3xl">Права доступа</h1>
         <p className="mt-1 text-sm text-subtle">
-          Матрица разрешений по ролям. Назначить роль пользователю может только{" "}
-          <span className="font-medium text-text">Администратор</span>{" "}
-          {me.user.role === "admin" && (
-            <>— это вы. <Link href="/users" className="text-accent">Перейти к пользователям →</Link></>
-          )}.
+          Матрица разрешений по ролям. Администратор управляет всеми ролями, а организатор может выдавать и забирать только роль волонтёра.
+          {(me.user.role === "admin" || me.user.role === "organizer") && (
+            <> <Link href="/users" className="text-accent">Перейти к пользователям →</Link></>
+          )}
         </p>
       </div>
 
@@ -201,18 +200,19 @@ export default function RolesPage() {
       </Card>
 
       {/* How to grant access */}
-      {me.user.role === "admin" && (
+      {(me.user.role === "admin" || me.user.role === "organizer") && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <IconShield size={16} className="text-subtle" />
-              Как выдать доступ
+              {me.user.role === "admin" ? "Как выдать доступ" : "Как назначить волонтёра"}
             </CardTitle>
           </CardHeader>
           <CardBody className="space-y-3 text-sm text-subtle">
             <p>
-              Чтобы дать пользователю роль <span className="font-medium text-text">Организатора</span> или{" "}
-              <span className="font-medium text-text">Волонтёра</span>:
+              {me.user.role === "admin"
+                ? <>Чтобы дать пользователю роль <span className="font-medium text-text">Организатора</span> или <span className="font-medium text-text">Волонтёра</span>:</>
+                : <>Чтобы выдать пользователю роль <span className="font-medium text-text">Волонтёра</span>:</>}
             </p>
             <ol className="ml-4 list-decimal space-y-1.5">
               <li>
@@ -223,7 +223,7 @@ export default function RolesPage() {
                 <Link href="/users" className="text-accent font-medium">
                   Пользователи
                 </Link>{" "}
-                и найдите нужного по имени или телефону.
+                и найдите нужного по имени, телефону или MAX ID.
               </li>
               <li>
                 В колонке «Роль» выберите нужную роль из выпадающего списка — она применяется сразу.
