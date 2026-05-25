@@ -4,10 +4,10 @@
 Кейс №2 хакатона. Стек: **Go + max-bot-api-client-go + PostgreSQL + GigaChat**,
 веб-админка — **Next.js + shadcn/ui**.
 
-> Связанные документы: [execution_plan.md](./execution_plan.md),
-> [docs/demo_walkthrough.md](./docs/demo_walkthrough.md),
+> Связанные документы: [docs/demo_walkthrough.md](./docs/demo_walkthrough.md),
 > [docs/runbook.md](./docs/runbook.md),
-> [SECURITY.md](./SECURITY.md).
+> [docs/deploy.md](./docs/deploy.md),
+> [docs/progress.md](./docs/progress.md).
 
 ## Что умеет сейчас
 
@@ -134,5 +134,4 @@ make docker-down
 - [docs/demo_walkthrough.md](./docs/demo_walkthrough.md) — сценарий показа жюри;
 - [docs/runbook.md](./docs/runbook.md) — эксплуатация и инциденты;
 - [docs/deploy.md](./docs/deploy.md) — развёртывание;
-- [docs/progress.md](./docs/progress.md) — прогресс по задачам;
-- [SECURITY.md](./SECURITY.md) — модель угроз и security-практики.
+- [docs/progress.md](./docs/progress.md) — прогресс по задачам.

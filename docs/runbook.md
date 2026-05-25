@@ -5,7 +5,7 @@
 пользователей по 152-ФЗ.
 
 > Связанные документы: README.md (обзор), [`demo_walkthrough.md`](./demo_walkthrough.md)
-> (продуктовые сценарии), `SECURITY.md` (модель угроз и инцидент-флоу).
+> (продуктовые сценарии) и [`deploy.md`](./deploy.md) (развёртывание и продовый деплой).
 
 ---
 
@@ -31,8 +31,7 @@ docker compose -f deployments/docker-compose.yml logs migrate   # однораз
 ```
 
 Все логи бота — JSON-строки с полем `time`, `level`, `msg`, `service`.
-PII в логах маскируется через `internal/pkg/secret.Mask*`
-(см. `SECURITY.md` §5). Cookie/токены не логируются.
+PII в логах маскируется через `internal/pkg/secret.Mask*`. Cookie и токены не логируются.
 
 Healthcheck:
 
@@ -282,6 +281,6 @@ docker compose -f deployments/docker-compose.yml run --rm migrate /app/migrate d
 - Не коммитить `.env`, `.env.local`, дампы БД, скриншоты с QR-кодами.
 - Не убирать `cap_drop: ALL` / `no-new-privileges` / `tmpfs` из
   docker-compose «для удобства» — это часть базовой harden'ой конфигурации
-  (см. `SECURITY.md`).
+  продового контура.
 - Не выключать `WAITLIST_ENABLED` посреди открытой регистрации —
   пользователи, попавшие в waitlist, перестанут промоутиться.

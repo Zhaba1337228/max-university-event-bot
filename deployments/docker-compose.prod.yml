@@ -53,6 +53,7 @@ services:
       - no-new-privileges:true
 
   migrate:
+    image: ${APP_IMAGE:-ghcr.io/zhaba1337228/max-university-event-bot-app}:${IMAGE_TAG:-main}
     build:
       context: ..
       dockerfile: deployments/Dockerfile
@@ -69,6 +70,7 @@ services:
     restart: "no"
 
   bot:
+    image: ${APP_IMAGE:-ghcr.io/zhaba1337228/max-university-event-bot-app}:${IMAGE_TAG:-main}
     build:
       context: ..
       dockerfile: deployments/Dockerfile
@@ -93,6 +95,7 @@ services:
       - no-new-privileges:true
 
   web:
+    image: ${WEB_IMAGE:-ghcr.io/zhaba1337228/max-university-event-bot-web}:${IMAGE_TAG:-main}
     build:
       context: ../web
       dockerfile: Dockerfile

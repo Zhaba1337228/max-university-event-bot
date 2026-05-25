@@ -3,8 +3,6 @@
 // Сервер поднимается на отдельном порту (по умолчанию :8081) и отдаёт
 // только JSON под /api/*. Все endpoint'ы (кроме /api/auth/exchange и
 // /api/healthz) защищены сессионным JWT cookie sid.
-//
-// Архитектура соответствует execution_plan.md §21A.
 package adminapi
 
 import (

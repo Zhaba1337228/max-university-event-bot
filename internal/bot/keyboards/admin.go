@@ -7,7 +7,7 @@ import (
 
 // AdminLoginLink — клавиатура из одной кнопки-ссылки на magic-link.
 // URL вида ${ADMIN_WEB_BASE_URL}/auth?t=<JWT>; JWT короткоживущий (5 мин,
-// HS256, purpose=magic). См. execution_plan.md § 21A.3.
+// HS256, purpose=magic).
 //
 // Используем AddLink, а не AddCallback: пользователь должен сразу попасть
 // в браузер на frontend, минуя backend.

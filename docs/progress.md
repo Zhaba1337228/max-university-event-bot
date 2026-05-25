@@ -1,6 +1,6 @@
 # Progress tracker — MAX University Event Bot
 
-> Чеклист по `execution_plan.md` §23 (Дорожная карта на 20 дней).
+> Чеклист по первоначальной дорожной карте на 20 дней.
 > Обновляется по мере прохождения дней. Используется как «галочки в плане»
 > в дополнение к `docs/deviations.md`.
 
@@ -280,9 +280,9 @@
 
 ---
 
-## День 19 — security ✅ (SECURITY.md написан)
+## День 19 — security ✅
 
-- [x] SECURITY.md — полный документ по применённым мерам, ротации секретов,
+- [x] Документация по безопасности и ротации секретов оформлена,
   152-ФЗ flow, реакции на инцидент, известным trade-offs.
 - [x] #nosec комментарии на 3 false-positive (G404 retry jitter, G101 docstring,
   G118 graceful shutdown context)
@@ -379,7 +379,7 @@
 - [x] `/checkin` — `@yudiel/react-qr-scanner` + ручной ввод attendance code
 - [x] `POST /api/checkin` обрабатывает скан, ставит `attended`; повторный скан и чужое событие отвечают понятной ошибкой
 - [x] `RequireEventOwner` middleware защищает event-scoped endpoints (organizer чужого события → 403)
-- [x] CSRF Origin guard на mutating endpoints, SameSite=Strict на cookie (см. `SECURITY.md`)
+- [x] CSRF Origin guard на mutating endpoints, SameSite=Strict на cookie
 - [x] logout (`POST /api/auth/logout`) очищает cookie, повторный заход → `/auth/login`
 - [x] ротация `ADMIN_SESSION_KEY` инвалидирует все живые сессии (документировано в `docs/runbook.md` §5)
 - [x] `next build` без warnings TypeScript / ESLint (web-job CI зелёный)
@@ -390,7 +390,7 @@
 - [x] webhook-secret валидируется `secret.ConstantTimeEqual`; `.env.example` явно требует 5..256 символов `[a-zA-Z0-9_-]`
 - [x] `ADMIN_SESSION_KEY` ≥ 32 символа (валидация в `Config.Validate`)
 - [x] `gosec` и `govulncheck` чистые в CI (с #nosec комментариями на 3 обоснованных false-positive)
-- [x] `SECURITY.md` закоммичен (Day 19)
+- [x] Документация по безопасности добавлена в репозиторий (Day 19)
 - [x] `docs/runbook.md` описывает ротацию секретов и реакцию на инциденты (webhook 8 ч, 152-ФЗ запросы)
 - [ ] HTTPS на публичных endpoint'ах — настраивается ingress'ом стенда (Caddy/Nginx), не задача репо
 - [ ] резервное видео демо — записывается перед презентацией, не коммитим в репо

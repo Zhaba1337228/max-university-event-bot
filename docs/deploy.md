@@ -61,19 +61,22 @@ cd /opt/app && make deploy
 После шагов выше — **каждый push в `main` автоматически деплоится**:
 
 ```
-push → CI (test + lint + build) → deploy (SSH → git pull → docker build → up)
+push → CI (test + lint + build) → build/push images → deploy (SSH → git pull → docker pull → up)
 ```
 
 Пайплайн: `.github/workflows/deploy.yml`
 
 - CI должен пройти первым (`needs: ci`)
+- образы `app` и `web` публикуются в GHCR с тегами `main` и `${git_sha}`
+- сервер тянет образ ровно под текущий commit checkout, поэтому rollback через `git reset` не ломается
+- GitHub Actions перед деплоем логинится в GHCR на сервере, поэтому автодеплой работает и с приватными пакетами
 - Параллельные деплои блокируются (`concurrency`)
 - После деплоя проверяется `/healthz`
 - При падении выводится инструкция для ручного отката
 
 ### Ручной деплой из GitHub Actions
 
-Вкладка **Actions → deploy → Run workflow** → опционально "Пропустить docker build".
+Вкладка **Actions → deploy → Run workflow**.
 
 ### Откат
 
@@ -82,7 +85,7 @@ ssh deploy@<IP>
 cd /opt/app
 git log --oneline -5          # найти нужный коммит
 git reset --hard abc1234       # откатиться
-make deploy --no-build
+make deploy-no-build
 ```
 
 ---
@@ -130,8 +133,8 @@ make deploy --no-build
 ## Makefile (шпаргалка)
 
 ```bash
-make deploy          # git pull + build + restart (prod)
-make deploy-no-build # только restart (образы не пересобирать)
+make deploy          # git pull + pull image + restart; если образа нет или нет GHCR auth, будет local build fallback
+make deploy-no-build # git pull + pull image + restart, без local build fallback
 make deploy-logs     # deploy + показать логи
 make prod-down       # остановить все контейнеры
 make prod-logs       # хвост логов всех сервисов

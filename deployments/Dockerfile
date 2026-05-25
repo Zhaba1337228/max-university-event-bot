@@ -5,7 +5,7 @@
 #   builder — компилирует bot и migrate под Linux/amd64 без CGO.
 #   runtime — alpine + ca-certificates + tzdata + non-root user.
 #
-# Особенности безопасности (см. SECURITY.md):
+# Особенности безопасности контейнера:
 #   - non-root (USER app)
 #   - ENTRYPOINT через /app/bot напрямую (без shell)
 #   - tini не нужен — Go обрабатывает SIGTERM сам

@@ -11,11 +11,6 @@ on:
 
   # Ручной запуск из вкладки Actions
   workflow_dispatch:
-    inputs:
-      no_build:
-        description: "Пропустить docker build (только restart)"
-        type: boolean
-        default: false
 
 # Один деплой за раз — новый push отменяет предыдущий если тот ещё идёт
 concurrency:
@@ -27,12 +22,67 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
+  publish-images:
+    name: Build and publish images
+    runs-on: ubuntu-latest
+    needs: ci
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deployments/Dockerfile
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/zhaba1337228/max-university-event-bot-app:${{ github.sha }}
+            ghcr.io/zhaba1337228/max-university-event-bot-app:main
+          cache-from: type=gha,scope=app-image
+          cache-to: type=gha,mode=max,scope=app-image
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          build-args: |
+            API_UPSTREAM=http://bot:8081
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/zhaba1337228/max-university-event-bot-web:${{ github.sha }}
+            ghcr.io/zhaba1337228/max-university-event-bot-web:main
+          cache-from: type=gha,scope=web-image
+          cache-to: type=gha,mode=max,scope=web-image
+
   # ── Деплой на сервер ──────────────────────────────────────────────────────
   deploy:
     name: Deploy to production
     runs-on: ubuntu-latest
-    needs: ci
+    needs:
+      - ci
+      - publish-images
     timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
     environment:
       name: production
       url: http://${{ secrets.DEPLOY_HOST }}
@@ -51,6 +101,7 @@ jobs:
           command_timeout: 12m
           script: |
             set -euo pipefail
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             cd /opt/app
 
             echo "=== git pull ==="
@@ -58,11 +109,7 @@ jobs:
             git reset --hard origin/main
 
             echo "=== deploy ==="
-            if [ "${{ inputs.no_build || 'false' }}" = "true" ]; then
-              bash scripts/deploy.sh --no-build
-            else
-              bash scripts/deploy.sh
-            fi
+            bash scripts/deploy.sh --no-build
 
       - name: Healthcheck
         run: |
@@ -89,4 +136,4 @@ jobs:
           echo "To rollback manually:"
           echo "  ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
           echo "  cd /opt/app && git log --oneline -5"
-          echo "  git reset --hard <prev_commit> && make deploy --no-build"
+          echo "  git reset --hard <prev_commit> && make deploy-no-build"

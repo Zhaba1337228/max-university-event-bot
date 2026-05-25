@@ -3,8 +3,8 @@
 # deploy.sh — deploy MAX University Event Bot
 #
 # Usage:
-#   ./scripts/deploy.sh             # pull + rebuild + restart
-#   ./scripts/deploy.sh --no-build  # restart only (images already built)
+#   ./scripts/deploy.sh             # git pull + image pull + restart, fallback to local build
+#   ./scripts/deploy.sh --no-build  # git pull + image pull + restart, without local build fallback
 #   ./scripts/deploy.sh --logs      # show logs after startup
 #
 # DOMAIN auto-detection:
@@ -175,10 +175,21 @@ git pull --ff-only
 ok "Code updated: $(git log -1 --pretty='%h %s')"
 
 # ── Build ──────────────────────────────────────────────────────────────────────
-if [ "$NO_BUILD" = false ]; then
-  info "Building Docker images (1-3 min on first run)..."
+if [ -z "${IMAGE_TAG:-}" ]; then
+  export IMAGE_TAG="$(git rev-parse HEAD)"
+fi
+info "Using image tag: ${IMAGE_TAG}"
+
+info "Pulling Docker images..."
+if DOMAIN="$DOMAIN" $COMPOSE pull migrate bot web; then
+  ok "Images pulled."
+elif [ "$NO_BUILD" = true ]; then
+  error "Failed to pull prebuilt images and --no-build is set."
+  exit 1
+else
+  warn "Prebuilt images are unavailable for tag ${IMAGE_TAG}. Falling back to local build."
   DOMAIN="$DOMAIN" $COMPOSE build --pull
-  ok "Images built."
+  ok "Images built locally."
 fi
 
 # ── Start ──────────────────────────────────────────────────────────────────────

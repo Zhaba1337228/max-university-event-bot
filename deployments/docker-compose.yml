@@ -45,7 +45,7 @@ services:
       - "8080:8080" # webhook + healthz
       - "8081:8081" # admin REST API
     restart: unless-stopped
-    # Безопасность контейнера (см. SECURITY.md).
+    # Безопасность контейнера.
     # read_only нельзя — нам нужен writable /tmp для QR-картинок.
     # Используем tmpfs для /tmp вместо writable layer.
     tmpfs:

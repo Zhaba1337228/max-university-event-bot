@@ -7,7 +7,7 @@
 ## Контекст
 - Repo: github.com/Zhaba1337228/max-university-event-bot (private)
 - Стек: Go 1.25.7, PostgreSQL 16, Next.js 14 (web/), JWT HS256, gocron/v2,
-  опц. GigaChat. Подробности — README.md, SECURITY.md, docs/progress.md.
+  опц. GigaChat. Подробности — README.md, docs/deploy.md, docs/progress.md.
 - Дни 1–19 + 21 + 14 + 16 завершены. CI зелёный (build/test/lint/security/migrate/web).
 
 ## Что сделать
