@@ -1,0 +1,380 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1779986029009,
+  "projectRoot": "D:\\max_hackathon",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Go",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "go.mod"
+        ]
+      },
+      {
+        "name": "C/C++",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "Makefile"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "go",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "go build ./... 2>&1 && go test ./... 2>&1 | tail -20",
+    "testCommand": "go test ./... 2>&1 | grep -E \"FAIL|ok\" | tail -20",
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "bin",
+      "docs",
+      "scripts"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "bin": {
+      "path": "bin",
+      "purpose": "Executable scripts",
+      "fileCount": 2,
+      "lastAccessed": 1779986028997,
+      "keyFiles": [
+        "bot.exe",
+        "migrate.exe"
+      ]
+    },
+    "cmd": {
+      "path": "cmd",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1779986028998,
+      "keyFiles": []
+    },
+    "deployments": {
+      "path": "deployments",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1779986028998,
+      "keyFiles": [
+        "Caddyfile",
+        "docker-compose.prod.yml",
+        "docker-compose.yml",
+        "Dockerfile"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 6,
+      "lastAccessed": 1779986028999,
+      "keyFiles": [
+        "day20_task.md",
+        "demo_walkthrough.md",
+        "deploy.md",
+        "deviations.md",
+        "progress.md"
+      ]
+    },
+    "internal": {
+      "path": "internal",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1779986029000,
+      "keyFiles": []
+    },
+    "migrations": {
+      "path": "migrations",
+      "purpose": "Database migrations",
+      "fileCount": 14,
+      "lastAccessed": 1779986029000,
+      "keyFiles": [
+        "20260101000001_init_users.sql",
+        "20260101000002_init_events.sql",
+        "20260101000003_init_registrations.sql",
+        "20260101000004_init_action_logs.sql",
+        "20260101000005_init_notifications.sql"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 2,
+      "lastAccessed": 1779986029000,
+      "keyFiles": [
+        "deploy.sh",
+        "setup-server.sh"
+      ]
+    },
+    "web": {
+      "path": "web",
+      "purpose": null,
+      "fileCount": 13,
+      "lastAccessed": 1779986029000,
+      "keyFiles": [
+        "Dockerfile",
+        "next-env.d.ts",
+        "next.config.mjs",
+        "package-lock.json",
+        "package.json"
+      ]
+    },
+    "internal\\app": {
+      "path": "internal\\app",
+      "purpose": "Application code",
+      "fileCount": 3,
+      "lastAccessed": 1779986029001,
+      "keyFiles": [
+        "app.go",
+        "config.go",
+        "config_test.go"
+      ]
+    },
+    "web\\app": {
+      "path": "web\\app",
+      "purpose": "Application code",
+      "fileCount": 3,
+      "lastAccessed": 1779986029001,
+      "keyFiles": [
+        "globals.css",
+        "layout.tsx",
+        "page.tsx"
+      ]
+    },
+    "web\\components": {
+      "path": "web\\components",
+      "purpose": "UI components",
+      "fileCount": 2,
+      "lastAccessed": 1779986029002,
+      "keyFiles": [
+        "me-context.tsx",
+        "nav.tsx"
+      ]
+    },
+    "web\\lib": {
+      "path": "web\\lib",
+      "purpose": "Library code",
+      "fileCount": 3,
+      "lastAccessed": 1779986029002,
+      "keyFiles": [
+        "api.ts",
+        "format.ts",
+        "types.ts"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "internal\\bot\\handlers\\events.go",
+      "accessCount": 11,
+      "lastAccessed": 1779989779318,
+      "type": "file"
+    },
+    {
+      "path": "internal\\bot\\messages\\ru.go",
+      "accessCount": 7,
+      "lastAccessed": 1779989756361,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 6,
+      "lastAccessed": 1779989140374,
+      "type": "directory"
+    },
+    {
+      "path": "internal\\bot\\keyboards\\events.go",
+      "accessCount": 6,
+      "lastAccessed": 1779989849568,
+      "type": "file"
+    },
+    {
+      "path": "web\\app\\(authenticated)\\events\\[id]\\page.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1779988145672,
+      "type": "file"
+    },
+    {
+      "path": "internal\\transport\\adminapi\\handlers.go",
+      "accessCount": 4,
+      "lastAccessed": 1779988046118,
+      "type": "file"
+    },
+    {
+      "path": "docs\\runbook.md",
+      "accessCount": 4,
+      "lastAccessed": 1779989297452,
+      "type": "file"
+    },
+    {
+      "path": "docs\\progress.md",
+      "accessCount": 4,
+      "lastAccessed": 1779989333391,
+      "type": "file"
+    },
+    {
+      "path": "internal\\repo\\events.go",
+      "accessCount": 3,
+      "lastAccessed": 1779988032434,
+      "type": "file"
+    },
+    {
+      "path": "internal\\bot\\callbacks\\payloads.go",
+      "accessCount": 3,
+      "lastAccessed": 1779988462508,
+      "type": "file"
+    },
+    {
+      "path": "internal\\service\\event.go",
+      "accessCount": 3,
+      "lastAccessed": 1779988573035,
+      "type": "file"
+    },
+    {
+      "path": "internal\\bot\\keyboards\\keyboards_test.go",
+      "accessCount": 3,
+      "lastAccessed": 1779990814478,
+      "type": "file"
+    },
+    {
+      "path": "internal\\bot\\messages",
+      "accessCount": 2,
+      "lastAccessed": 1779988005372,
+      "type": "directory"
+    },
+    {
+      "path": "internal\\repo\\interfaces.go",
+      "accessCount": 2,
+      "lastAccessed": 1779988020483,
+      "type": "file"
+    },
+    {
+      "path": "internal\\transport\\adminapi\\server.go",
+      "accessCount": 2,
+      "lastAccessed": 1779988083072,
+      "type": "directory"
+    },
+    {
+      "path": "web\\components\\ui\\icons.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1779988119860,
+      "type": "file"
+    },
+    {
+      "path": "internal\\bot\\fsm\\context.go",
+      "accessCount": 2,
+      "lastAccessed": 1779988455629,
+      "type": "file"
+    },
+    {
+      "path": "_deploy_tmp.py",
+      "accessCount": 2,
+      "lastAccessed": 1779989029543,
+      "type": "file"
+    },
+    {
+      "path": "seed_events.sql",
+      "accessCount": 1,
+      "lastAccessed": 1779986071993,
+      "type": "file"
+    },
+    {
+      "path": "seed_via_sftp.py",
+      "accessCount": 1,
+      "lastAccessed": 1779986087843,
+      "type": "file"
+    },
+    {
+      "path": "internal\\bot\\keyboards",
+      "accessCount": 1,
+      "lastAccessed": 1779987552466,
+      "type": "directory"
+    },
+    {
+      "path": "internal\\transport\\adminapi",
+      "accessCount": 1,
+      "lastAccessed": 1779987553607,
+      "type": "directory"
+    },
+    {
+      "path": "web",
+      "accessCount": 1,
+      "lastAccessed": 1779987555371,
+      "type": "directory"
+    },
+    {
+      "path": "web\\app\\page.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779987740229,
+      "type": "file"
+    },
+    {
+      "path": "web\\lib\\api.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779987740734,
+      "type": "file"
+    },
+    {
+      "path": "internal\\repo",
+      "accessCount": 1,
+      "lastAccessed": 1779987749686,
+      "type": "directory"
+    },
+    {
+      "path": "internal\\domain",
+      "accessCount": 1,
+      "lastAccessed": 1779987807792,
+      "type": "directory"
+    },
+    {
+      "path": "internal\\domain\\event.go",
+      "accessCount": 1,
+      "lastAccessed": 1779987812358,
+      "type": "file"
+    },
+    {
+      "path": "internal\\transport\\adminapi\\handlers_p1.go",
+      "accessCount": 1,
+      "lastAccessed": 1779987882642,
+      "type": "file"
+    },
+    {
+      "path": "internal\\service",
+      "accessCount": 1,
+      "lastAccessed": 1779988562922,
+      "type": "directory"
+    },
+    {
+      "path": "scripts\\deploy.sh",
+      "accessCount": 1,
+      "lastAccessed": 1779989887765,
+      "type": "file"
+    },
+    {
+      "path": "internal\\bot\\keyboards\\main_menu.go",
+      "accessCount": 1,
+      "lastAccessed": 1779990808145,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

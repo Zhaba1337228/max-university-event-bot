@@ -12,26 +12,19 @@ import (
 )
 
 // Notification — сервис уведомлений.
-//
-// На MVP реализованы:
-//   - SendBroadcast(eventID, text) — массовая рассылка всем registered;
-//   - ScheduleUpcomingReminders(hoursCSV) и DispatchDue(now) — заглушки
-//     под scheduler в Дне 16.
-//
-// Все методы атомарны в рамках одного notification: либо MarkSent, либо MarkFailed.
 type Notification interface {
 	// SendBroadcast рассылает text всем активным (registered) участникам события.
-	// Возвращает кол-во успешно отправленных. ActionLog notification_sent.
-	// Соблюдает rate limit (rps из конфига): между батчами sleep.
 	SendBroadcast(ctx context.Context, eventID int64, text string) (int, error)
 
 	// ScheduleUpcomingReminders создаёт записи notifications.reminder_*
-	// для всех ближайших событий. Идемпотентно — uniq_notif_dedup ловит дубли.
 	ScheduleUpcomingReminders(ctx context.Context, hoursBefore []int) (int, error)
 
 	// DispatchDue выгребает pending уведомления со scheduled_at <= now и шлёт их.
-	// Возвращает (sent, failed).
 	DispatchDue(ctx context.Context, now time.Time, limit int) (int, int, error)
+
+	// SendPersonalFeed отправляет пользователю персональные рекомендации после check-in.
+	// maxUserID — MAX user_id получателя. text — готовый текст сообщения.
+	SendPersonalFeed(ctx context.Context, maxUserID int64, text string) error
 }
 
 type notificationService struct {
@@ -196,4 +189,9 @@ func (s *notificationService) ScheduleUpcomingReminders(ctx context.Context, _ [
 func (s *notificationService) DispatchDue(ctx context.Context, _ time.Time, _ int) (int, int, error) {
 	_ = ctx
 	return 0, 0, nil
+}
+
+// SendPersonalFeed отправляет персональные рекомендации пользователю.
+func (s *notificationService) SendPersonalFeed(ctx context.Context, maxUserID int64, text string) error {
+	return s.api.SendText(ctx, maxUserID, text)
 }

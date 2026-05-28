@@ -47,6 +47,7 @@ type Deps struct {
 	Notification   service.Notification
 	Attendance     service.Attendance
 	ActionLogs     service.ActionLog
+	AI             service.AI // опционально, может быть nil
 	RegsRepo       repo.RegistrationRepo
 	UsersRepo      repo.UserRepo // нужен для checkin (local id → max id lookup)
 	EventsRepo     repo.EventRepo
@@ -164,6 +165,10 @@ func (s *Server) routes() http.Handler {
 		// Users / volunteers (admin + organizer).
 		r.With(requireRoles(domain.RoleAdmin, domain.RoleOrganizer)).Get("/users", s.handleListUsers)
 		r.With(requireRoles(domain.RoleAdmin, domain.RoleOrganizer)).Patch("/users/{id}/role", s.handleSetUserRole)
+
+		// AI helpers (organizer+).
+		r.With(requireRoles(domain.RoleAdmin, domain.RoleOrganizer)).Post("/ai/announce", s.handleAIAnnounce)
+		r.With(requireRoles(domain.RoleAdmin, domain.RoleOrganizer)).Post("/ai/tags", s.handleAITags)
 	})
 
 	return r

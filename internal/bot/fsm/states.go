@@ -33,6 +33,7 @@ const (
 
 	StateAIPickIntent = "ai_pick_intent"
 	StateAIResults    = "ai_results"
+	StateAIFAQIntent  = "ai_faq_intent"
 )
 
 // Состояния организаторского сценария.
@@ -54,6 +55,7 @@ func IsTextInput(s State) bool {
 	case StateRegFullName,
 		StateRegInterest,
 		StateAIPickIntent,
+		StateAIFAQIntent,
 		StateOrganizerNotifText,
 		StateOrganizerSearchCode:
 		return true

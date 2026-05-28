@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build *)",
+      "Bash(go test *)",
+      "Bash(sshpass *)",
+      "Bash(python3 -c \"import paramiko; print\\('paramiko ok'\\)\")",
+      "PowerShell(& \"C:\\\\Users\\\\vasak\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" -c \"import paramiko; print\\('ok'\\)\" 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\vasak\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" D:\\\\max_hackathon\\\\ssh_deploy.py 2>&1)",
+      "PowerShell($env:PYTHONUTF8 = \"1\"; & \"C:\\\\Users\\\\vasak\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" D:\\\\max_hackathon\\\\ssh_deploy.py)",
+      "Bash(python *)",
+      "Bash(Remove-Item *)",
+      "Bash(git add *)",
+      "Bash(git restore *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(gofmt *)",
+      "Bash(go doc *)",
+      "Bash(python3 *)"
+    ]
+  }
+}

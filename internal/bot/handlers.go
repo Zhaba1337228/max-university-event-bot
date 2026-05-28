@@ -37,6 +37,7 @@ type Handlers struct {
 	OrgNotify     *handlers.OrganizerNotifyHandler
 	AdminLogin    *handlers.AdminLoginHandler
 	AIPick        *handlers.AIPickHandler
+	AIFAQ         *handlers.AIFAQHandler
 }
 
 // HandlersConfig — групповая инициализация. По мере роста зависимостей удобнее
@@ -89,6 +90,7 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 	h.OrgNotify = handlers.NewOrganizerNotifyHandler(cfg.API, cfg.FSM, cfg.Role,
 		cfg.Events, cfg.Notification, cfg.AI, cfg.RegsRepo, cfg.DB, cfg.Log)
 	h.AIPick = handlers.NewAIPickHandler(cfg.API, cfg.FSM, cfg.AI, cfg.Events, cfg.Log)
+	h.AIFAQ = handlers.NewAIFAQHandler(cfg.API, cfg.FSM, cfg.AI, cfg.Events, cfg.Log)
 	if cfg.Auth != nil {
 		h.AdminLogin = handlers.NewAdminLoginHandler(cfg.API, cfg.Auth, cfg.WebBaseURL, cfg.Log)
 	}
@@ -150,6 +152,12 @@ func (h *Handlers) RouteMessage(ctx context.Context, upd *schemes.MessageCreated
 		} else {
 			h.Fallback.OnText(ctx, upd)
 		}
+	case fsm.StateAIFAQIntent:
+		if h.AIFAQ != nil {
+			h.AIFAQ.OnText(ctx, upd, snap)
+		} else {
+			h.Fallback.OnText(ctx, upd)
+		}
 	default:
 		h.Fallback.OnText(ctx, upd)
 	}
@@ -185,7 +193,13 @@ func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallba
 	case callbacks.GroupOrgCancel:
 		h.Organizer.OnCancelCallback(ctx, upd, p)
 	case callbacks.GroupAI:
-		if h.AIPick != nil {
+		if p.Action == "faq" {
+			if h.AIFAQ != nil {
+				h.AIFAQ.OnCallback(ctx, upd, p)
+			} else {
+				h.Fallback.OnCallback(ctx, upd, p)
+			}
+		} else if h.AIPick != nil {
 			h.AIPick.OnCallback(ctx, upd, p)
 		} else {
 			h.Fallback.OnCallback(ctx, upd, p)

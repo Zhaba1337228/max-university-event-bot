@@ -23,8 +23,8 @@ func TestMainMenuStructure(t *testing.T) {
 	t.Parallel()
 
 	kb := keyboards.MainMenu()
-	if rows := rowsCount(kb); rows != 4 {
-		t.Errorf("MainMenu: want 4 rows, got %d", rows)
+	if rows := rowsCount(kb); rows != 5 {
+		t.Errorf("MainMenu: want 5 rows, got %d", rows)
 	}
 }
 

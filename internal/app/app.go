@@ -164,12 +164,14 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 			RecommenderEnabled: cfg.AI.RecommenderEnabled,
 			RewriterEnabled:    cfg.AI.RewriterEnabled,
 			SummaryEnabled:     cfg.AI.SummaryEnabled,
+			FAQEnabled:         cfg.AI.FAQEnabled,
 			RequestTimeout:     cfg.AI.RequestTimeout,
 		}, log)
 		log.Info("ai enabled",
 			"recommender", cfg.AI.RecommenderEnabled,
 			"rewriter", cfg.AI.RewriterEnabled,
 			"summary", cfg.AI.SummaryEnabled,
+			"faq", cfg.AI.FAQEnabled,
 		)
 	} else {
 		log.Info("ai disabled (GIGACHAT_AUTH_KEY empty)")
@@ -213,6 +215,7 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 			Notification:   notifSvc,
 			Attendance:     attendSvc,
 			ActionLogs:     actionLogSvc,
+			AI:             aiSvc,
 			RegsRepo:       regsRepo,
 			UsersRepo:      usersRepo,
 			EventsRepo:     eventsRepo,

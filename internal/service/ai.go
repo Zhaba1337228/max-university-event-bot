@@ -19,6 +19,7 @@ type AIConfig struct {
 	RecommenderEnabled bool
 	RewriterEnabled    bool
 	SummaryEnabled     bool
+	FAQEnabled         bool
 	RequestTimeout     time.Duration
 }
 
@@ -35,6 +36,12 @@ type AI interface {
 	RecommendEvents(ctx context.Context, interest string, events []*domain.Event) ([]Recommendation, error)
 	RewriteNotification(ctx context.Context, draft string, ev *domain.Event) (string, error)
 	OrganizerSummary(ctx context.Context, ev *domain.Event, stats *domain.EventStats) (string, error)
+	// GenerateAnnounce генерирует описание и короткое превью мероприятия.
+	GenerateAnnounce(ctx context.Context, title, date, location, format, hint string) (description, shortSummary string, err error)
+	// SuggestTags предлагает теги по названию и описанию.
+	SuggestTags(ctx context.Context, title, description string) ([]string, error)
+	// AnswerFAQ отвечает на вопрос пользователя по списку событий.
+	AnswerFAQ(ctx context.Context, question string, events []*domain.Event) (string, error)
 }
 
 type aiService struct {
@@ -312,4 +319,95 @@ func formatEventsCatalogForAI(events []*domain.Event) string {
 		sb.WriteString("format: " + string(e.Format))
 	}
 	return sb.String()
+}
+
+// GenerateAnnounce генерирует описание и короткое превью мероприятия.
+func (a *aiService) GenerateAnnounce(ctx context.Context, title, date, location, format, hint string) (string, string, error) {
+	if a.client == nil {
+		return "", "", ErrAIUnavailable
+	}
+	if strings.TrimSpace(hint) == "" {
+		hint = "нет"
+	}
+	user := fmt.Sprintf(gigachat.UserAnnounceTemplate, title, date, location, format, hint)
+	resp, err := a.callWithTimeout(ctx, []gigachat.ChatMessage{
+		{Role: "system", Content: gigachat.SystemAnnounce},
+		{Role: "user", Content: user},
+	}, 0.7)
+	if err != nil {
+		return "", "", ErrAIUnavailable
+	}
+	raw := extractJSONObject(resp.Choices[0].Message.Content)
+	var parsed struct {
+		Description  string `json:"description"`
+		ShortSummary string `json:"short_summary"`
+	}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		a.log.Warn("ai: bad json from announce", "err", err)
+		return "", "", ErrAIUnavailable
+	}
+	desc := strings.TrimSpace(parsed.Description)
+	short := strings.TrimSpace(parsed.ShortSummary)
+	if desc == "" {
+		return "", "", ErrAIUnavailable
+	}
+	return desc, short, nil
+}
+
+// SuggestTags предлагает теги по названию и описанию.
+func (a *aiService) SuggestTags(ctx context.Context, title, description string) ([]string, error) {
+	if a.client == nil {
+		return nil, ErrAIUnavailable
+	}
+	user := fmt.Sprintf(gigachat.UserTagSuggestTemplate, title, description)
+	resp, err := a.callWithTimeout(ctx, []gigachat.ChatMessage{
+		{Role: "system", Content: gigachat.SystemTagSuggest},
+		{Role: "user", Content: user},
+	}, 0.3)
+	if err != nil {
+		return nil, ErrAIUnavailable
+	}
+	raw := extractJSONObject(resp.Choices[0].Message.Content)
+	var parsed struct {
+		Tags []string `json:"tags"`
+	}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		a.log.Warn("ai: bad json from tag suggest", "err", err)
+		return nil, ErrAIUnavailable
+	}
+	if len(parsed.Tags) == 0 {
+		return nil, ErrAIUnavailable
+	}
+	return parsed.Tags, nil
+}
+
+// AnswerFAQ отвечает на вопрос пользователя по списку событий.
+func (a *aiService) AnswerFAQ(ctx context.Context, question string, events []*domain.Event) (string, error) {
+	if !a.cfg.FAQEnabled || a.client == nil {
+		return "", ErrAIUnavailable
+	}
+	if strings.TrimSpace(question) == "" || len(events) == 0 {
+		return "", ErrAIUnavailable
+	}
+	user := fmt.Sprintf(gigachat.UserFAQTemplate, question, formatEventsCatalogForAI(events))
+	resp, err := a.callWithTimeout(ctx, []gigachat.ChatMessage{
+		{Role: "system", Content: gigachat.SystemFAQ},
+		{Role: "user", Content: user},
+	}, 0.3)
+	if err != nil {
+		return "", ErrAIUnavailable
+	}
+	raw := extractJSONObject(resp.Choices[0].Message.Content)
+	var parsed struct {
+		Answer string `json:"answer"`
+	}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		a.log.Warn("ai: bad json from faq", "err", err)
+		return "", ErrAIUnavailable
+	}
+	answer := strings.TrimSpace(parsed.Answer)
+	if answer == "" {
+		return "", ErrAIUnavailable
+	}
+	return answer, nil
 }

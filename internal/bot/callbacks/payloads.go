@@ -193,6 +193,9 @@ func AIPickStart() string { return build(GroupAI, "pick") }
 // AIPage — показать страницу AI-рекомендаций с offset.
 func AIPage(offset int) string { return build(GroupAI, "page", itoa(offset)) }
 
+// AIFAQStart — начать FAQ-диалог.
+func AIFAQStart() string { return build(GroupAI, "faq") }
+
 // --- Waitlist ---
 
 // WaitlistJoin — встать в лист ожидания на eventID.

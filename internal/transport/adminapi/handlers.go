@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -518,6 +519,48 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 		"registration": registrationToDTO(res.Registration, true),
 		"event":        eventToDTO(res.Event),
 	})
+
+	// Персональная лента: после первого check-in асинхронно шлём рекомендации.
+	if !res.AlreadyDone && s.deps.AI != nil && s.deps.Notification != nil {
+		reg := res.Registration
+		ev := res.Event
+		go func() {
+			ctx2, cancel := context.WithTimeout(context.Background(), 20*time.Second) //nolint:gosec
+			defer cancel()
+			items, _, err := s.deps.Events.ListOpen(ctx2, 50, 0)
+			if err != nil || len(items) == 0 {
+				return
+			}
+			pool := make([]*domain.Event, 0, len(items))
+			for _, it := range items {
+				if it.Event.ID != ev.ID { // не рекомендуем то же событие
+					pool = append(pool, it.Event)
+				}
+			}
+			if len(pool) == 0 {
+				return
+			}
+			// Используем название посещённого события как интерес.
+			recs, err := s.deps.AI.RecommendEvents(ctx2, ev.Title, pool)
+			if err != nil || len(recs) == 0 {
+				return
+			}
+			var sb strings.Builder
+			sb.WriteString("Вам также могут понравиться:\n\n")
+			for _, r := range recs {
+				sb.WriteString(fmt.Sprintf("• %s\n", r.Title))
+				if r.Reason != "" {
+					sb.WriteString(fmt.Sprintf("  %s\n", r.Reason))
+				}
+			}
+			// Получаем MaxUserID участника через регистрацию.
+			attendee, err := s.deps.UsersRepo.GetByID(ctx2, s.deps.DB, reg.UserID)
+			if err != nil || attendee == nil {
+				return
+			}
+			_ = s.deps.Notification.SendPersonalFeed(ctx2, attendee.MaxUserID, sb.String())
+		}()
+	}
 }
 
 // --- DASHBOARD ---
@@ -715,4 +758,66 @@ func maskContactDTO(s string) string {
 		return s[:2] + "***" + s[len(s)-2:]
 	}
 	return "***"
+}
+
+// handleAIAnnounce — POST /api/ai/announce
+// Body: { title, date, location, format, hint }
+// Response: { description, short_summary }
+func (s *Server) handleAIAnnounce(w http.ResponseWriter, r *http.Request) {
+	if s.deps.AI == nil {
+		writeJSON(w, http.StatusServiceUnavailable, errResp("ai_unavailable", "AI не настроен"))
+		return
+	}
+	var body struct {
+		Title    string `json:"title"`
+		Date     string `json:"date"`
+		Location string `json:"location"`
+		Format   string `json:"format"`
+		Hint     string `json:"hint"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errResp("bad_body", "Невалидный JSON"))
+		return
+	}
+	if strings.TrimSpace(body.Title) == "" {
+		writeJSON(w, http.StatusBadRequest, errResp("missing_title", "Поле title обязательно"))
+		return
+	}
+	desc, short, err := s.deps.AI.GenerateAnnounce(r.Context(), body.Title, body.Date, body.Location, body.Format, body.Hint)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, errResp("ai_unavailable", "AI временно недоступен"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"description":   desc,
+		"short_summary": short,
+	})
+}
+
+// handleAITags — POST /api/ai/tags
+// Body: { title, description }
+// Response: { tags: ["string", ...] }
+func (s *Server) handleAITags(w http.ResponseWriter, r *http.Request) {
+	if s.deps.AI == nil {
+		writeJSON(w, http.StatusServiceUnavailable, errResp("ai_unavailable", "AI не настроен"))
+		return
+	}
+	var body struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errResp("bad_body", "Невалидный JSON"))
+		return
+	}
+	if strings.TrimSpace(body.Title) == "" {
+		writeJSON(w, http.StatusBadRequest, errResp("missing_title", "Поле title обязательно"))
+		return
+	}
+	tags, err := s.deps.AI.SuggestTags(r.Context(), body.Title, body.Description)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, errResp("ai_unavailable", "AI временно недоступен"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
 }

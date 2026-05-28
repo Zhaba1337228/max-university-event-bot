@@ -682,6 +682,21 @@ func AIAskInterest() string {
 	return "Опишите, что вам интересно (одной фразой). Я подберу подходящее мероприятие."
 }
 
+// AIAskFAQ — приглашение задать вопрос.
+func AIAskFAQ() string {
+	return "Задайте вопрос о мероприятиях — я отвечу на основе актуального расписания."
+}
+
+// AIFAQAnswer — ответ на вопрос пользователя.
+func AIFAQAnswer(answer string) string {
+	return joinLines(answer, "", AIWarningNote())
+}
+
+// AIFAQUnavailable — FAQ недоступен.
+func AIFAQUnavailable() string {
+	return "Не удалось ответить на вопрос. Попробуйте позже или посмотрите список мероприятий."
+}
+
 // AIUnavailable — ИИ упал, fallback в обычный список.
 func AIUnavailable() string {
 	return "Подбор временно недоступен. Покажу обычный список мероприятий."

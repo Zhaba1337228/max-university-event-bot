@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
 
 // EventForm — переиспользуемая форма создания и редактирования мероприятия.
 //
@@ -71,6 +72,8 @@ export function EventForm({ mode, initial, onSubmit, submitting, error }: Props)
   );
   const [tagsText, setTagsText] = useState((initial?.tags ?? []).join(", "));
   const [clientErr, setClientErr] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiTagsLoading, setAiTagsLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -129,6 +132,43 @@ export function EventForm({ mode, initial, onSubmit, submitting, error }: Props)
     await onSubmit(input);
   }
 
+  async function handleAIAnnounce() {
+    if (!title.trim()) { setClientErr("Введите название для генерации описания"); return; }
+    setAiLoading(true);
+    setClientErr(null);
+    try {
+      const res = await api.post<{ description: string; short_summary: string }>("/api/ai/announce", {
+        title: title.trim(),
+        date: startsAt ? new Date(startsAt).toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "",
+        location: location.trim(),
+        format: format,
+        hint: description.trim(),
+      });
+      if (res.description) setDescription(res.description);
+    } catch {
+      setClientErr("AI временно недоступен");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  async function handleAITags() {
+    if (!title.trim()) { setClientErr("Введите название для подбора тегов"); return; }
+    setAiTagsLoading(true);
+    setClientErr(null);
+    try {
+      const res = await api.post<{ tags: string[] }>("/api/ai/tags", {
+        title: title.trim(),
+        description: description.trim(),
+      });
+      if (res.tags?.length) setTagsText(res.tags.join(", "));
+    } catch {
+      setClientErr("AI временно недоступен");
+    } finally {
+      setAiTagsLoading(false);
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <Card>
@@ -152,6 +192,15 @@ export function EventForm({ mode, initial, onSubmit, submitting, error }: Props)
               placeholder="Полное описание мероприятия (видно абитуриентам в боте)"
               maxLength={16000}
             />
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={aiLoading}
+              onClick={handleAIAnnounce}
+              className="mt-1.5 gap-1.5 text-xs"
+            >
+              {aiLoading ? "Генерирую…" : "✨ Сгенерировать описание"}
+            </Button>
           </Field>
         </CardBody>
       </Card>
@@ -221,6 +270,15 @@ export function EventForm({ mode, initial, onSubmit, submitting, error }: Props)
               onChange={(e) => setTagsText(e.target.value)}
               placeholder="ит, дизайн, открытые-двери"
             />
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={aiTagsLoading}
+              onClick={handleAITags}
+              className="mt-1.5 gap-1.5 text-xs"
+            >
+              {aiTagsLoading ? "Подбираю…" : "✨ Предложить теги"}
+            </Button>
           </Field>
           {mode === "edit" && (
             <Field label="Статус">

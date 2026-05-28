@@ -8,16 +8,12 @@ import (
 )
 
 // MainMenu — главное меню абитуриента.
-// Состав:
-//   - «Записаться на мероприятие» (POSITIVE)
-//   - «Моя запись»
-//   - «Подобрать через ИИ»
-//   - «Помощь»
 func MainMenu() *maxbot.Keyboard {
 	kb := newKB()
 	kb.AddRow().AddCallback("Записаться на мероприятие", schemes.POSITIVE, callbacks.EventListPage(0))
 	kb.AddRow().AddCallback("Моя запись", schemes.DEFAULT, callbacks.MyShow())
 	kb.AddRow().AddCallback("Подобрать через ИИ", schemes.DEFAULT, callbacks.AIPickStart())
+	kb.AddRow().AddCallback("Задать вопрос ИИ", schemes.DEFAULT, callbacks.AIFAQStart())
 	kb.AddRow().AddCallback("Помощь", schemes.DEFAULT, callbacks.MainMenu())
 	return kb
 }
