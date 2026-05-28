@@ -100,6 +100,8 @@ ORDER BY scheduled_at DESC;
 - `GIGACHAT_AUTH_KEY=""` — выключает GigaChat-клиент целиком.
 - `AI_EVENT_RECOMMENDER_ENABLED`, `AI_NOTIFICATION_REWRITER_ENABLED`,
   `AI_ORGANIZER_SUMMARY_ENABLED` — точечные флаги для трёх AI-сценариев.
+- `AI_FAQ_ENABLED=true` — включает кнопку «Задать вопрос ИИ» в главном меню;
+  при `false` (по умолчанию) кнопка скрыта, даже если GigaChat доступен.
 - `GIGACHAT_INSECURE_TLS=true` — **только dev**, никогда в prod.
 
 ---

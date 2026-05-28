@@ -380,6 +380,17 @@
 - [x] `service.GetOpen`: дополнительная проверка `!e.StartsAt.IsZero() && e.StartsAt.Before(time.Now())` — защита от deep-link на уже начавшееся событие
 - [x] Тест `TestGetOpenFreeSeatsNotNegative` обновлён: guard `!IsZero()` корректно обходит zero-time в тестах
 
+### AI FAQ — ответы на вопросы
+
+- [x] Новая кнопка «Задать вопрос ИИ» в главном меню (условная: отображается только при `AI_FAQ_ENABLED=true`)
+- [x] `AIFAQHandler` — FSM-сценарий: кнопка → вопрос в тексте → ответ GigaChat с контекстом текущих событий
+- [x] `service.AI.AnswerFAQ(ctx, question, events)` — новый метод AI-сервиса
+- [x] `fsm.StateAIFAQIntent` — новое состояние для ожидания вопроса
+- [x] Callbacks: `AIFAQStart()` → группа `GroupAI`, action `faq`
+- [x] Graceful fallback: при недоступности GigaChat возвращает «AI-ответы временно недоступны» и главное меню
+- [x] `keyboards.SetFAQEnabled(v)` — управление видимостью кнопки из app.go без перезапуска всей клавиатуры
+- [x] Тест `TestMainMenuStructure` покрывает оба варианта: `faqEnabled=false` (4 кнопки) и `faqEnabled=true` (5 кнопок)
+
 ---
 
 ## Чеклист готовности к демо (см. план §24) ✅
