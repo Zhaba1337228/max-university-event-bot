@@ -113,41 +113,28 @@ func (h *EventsHandler) OnCallback(ctx context.Context, upd *schemes.MessageCall
 
 func (h *EventsHandler) showFilterMenu(ctx context.Context, chatID int64, fc fsm.UserFSMContext) {
 	kb := keyboards.EventFilterMenu(fc.EventFilter, fc.EventTimeFilter, fc.EventSeatsOnly, fc.EventTagFilter)
-	if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.EventFilterMenuHeader(), kb); err != nil {
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.EventFilterMenuHeader(buildFilterSummary(fc)), kb); err != nil {
 		h.log.Error("send filter menu failed", "err", err)
 	}
 }
 
 func buildFilterSummary(fc fsm.UserFSMContext) string {
-	count := 0
-	var single string
+	var parts []string
 	if fc.EventFilter != "" {
-		count++
-		single = humanFilterFormat(fc.EventFilter)
+		parts = append(parts, humanFilterFormat(fc.EventFilter))
 	}
-	if fc.EventTimeFilter != "" {
-		count++
-		if fc.EventTimeFilter == "today" {
-			single = "Сегодня"
-		} else {
-			single = "Эта неделя"
-		}
+	if fc.EventTimeFilter == "today" {
+		parts = append(parts, "Сегодня")
+	} else if fc.EventTimeFilter == "week" {
+		parts = append(parts, "На неделю")
 	}
 	if fc.EventSeatsOnly {
-		count++
-		single = "С местами"
+		parts = append(parts, "Свободные места")
 	}
 	if fc.EventTagFilter != "" {
-		count++
-		single = "#" + fc.EventTagFilter
+		parts = append(parts, "#"+fc.EventTagFilter)
 	}
-	if count == 0 {
-		return ""
-	}
-	if count == 1 {
-		return single
-	}
-	return fmt.Sprintf("%d активных", count)
+	return strings.Join(parts, " · ")
 }
 
 func humanFilterFormat(f string) string {

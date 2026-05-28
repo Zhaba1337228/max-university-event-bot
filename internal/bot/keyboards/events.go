@@ -54,83 +54,73 @@ func EventList(events []*domain.Event, offset int, hasMore bool, activeFilter st
 }
 
 // EventFilterMenu — экран выбора фильтров (формат, время, места, тема).
+// Активная опция помечается «✓ » префиксом и стилем POSITIVE.
 func EventFilterMenu(formatFilter, timeFilter string, seatsOnly bool, tagFilter string) *maxbot.Keyboard {
 	kb := newKB()
 
 	// --- Формат ---
 	fmtRow := kb.AddRow()
 	for _, f := range []struct{ label, val string }{
-		{"Формат: Все", ""},
+		{"Все форматы", ""},
 		{"Очно", "offline"},
 		{"Онлайн", "online"},
 		{"Гибрид", "hybrid"},
 	} {
-		style := schemes.DEFAULT
-		if formatFilter == f.val {
-			style = schemes.POSITIVE
-		}
-		fmtRow.AddCallback(f.label, style, callbacks.EventFilterSet(f.val))
+		label, style := filterBtn(f.label, formatFilter == f.val)
+		fmtRow.AddCallback(label, style, callbacks.EventFilterSet(f.val))
 	}
 
 	// --- Когда ---
 	timeRow := kb.AddRow()
 	for _, f := range []struct{ label, val string }{
-		{"Когда: Любое", ""},
+		{"Любое время", ""},
 		{"Сегодня", "today"},
-		{"Эта неделя", "week"},
+		{"На неделю", "week"},
 	} {
-		style := schemes.DEFAULT
-		if timeFilter == f.val {
-			style = schemes.POSITIVE
-		}
-		timeRow.AddCallback(f.label, style, callbacks.EventFilterTime(f.val))
+		label, style := filterBtn(f.label, timeFilter == f.val)
+		timeRow.AddCallback(label, style, callbacks.EventFilterTime(f.val))
 	}
 
 	// --- Места ---
 	seatsRow := kb.AddRow()
-	allSeatsStyle := schemes.DEFAULT
-	if !seatsOnly {
-		allSeatsStyle = schemes.POSITIVE
-	}
-	seatsRow.AddCallback("Места: Все", allSeatsStyle, callbacks.EventFilterSeats(""))
-	onlyFreeStyle := schemes.DEFAULT
-	if seatsOnly {
-		onlyFreeStyle = schemes.POSITIVE
-	}
-	seatsRow.AddCallback("Только свободные", onlyFreeStyle, callbacks.EventFilterSeats("1"))
+	lAll, sAll := filterBtn("Любое кол-во", !seatsOnly)
+	lFree, sFree := filterBtn("Только свободные", seatsOnly)
+	seatsRow.AddCallback(lAll, sAll, callbacks.EventFilterSeats(""))
+	seatsRow.AddCallback(lFree, sFree, callbacks.EventFilterSeats("1"))
 
 	// --- Тема ---
 	tagRow := kb.AddRow()
 	for _, f := range []struct{ label, val string }{
-		{"Тема: Все", ""},
+		{"Все темы", ""},
 		{"IT", "it"},
 		{"Карьера", "карьера"},
 		{"Хакатон", "хакатон"},
 	} {
-		style := schemes.DEFAULT
-		if tagFilter == f.val {
-			style = schemes.POSITIVE
-		}
-		tagRow.AddCallback(f.label, style, callbacks.EventFilterTag(f.val))
+		label, style := filterBtn(f.label, tagFilter == f.val)
+		tagRow.AddCallback(label, style, callbacks.EventFilterTag(f.val))
 	}
-	// дополнительный ряд тем
 	extraTagRow := kb.AddRow()
 	for _, f := range []struct{ label, val string }{
 		{"Поступление", "поступление"},
 		{"Олимпиада", "олимпиада"},
 		{"DevOps", "devops"},
 	} {
-		style := schemes.DEFAULT
-		if tagFilter == f.val {
-			style = schemes.POSITIVE
-		}
-		extraTagRow.AddCallback(f.label, style, callbacks.EventFilterTag(f.val))
+		label, style := filterBtn(f.label, tagFilter == f.val)
+		extraTagRow.AddCallback(label, style, callbacks.EventFilterTag(f.val))
 	}
 
 	kb.AddRow().AddCallback("Сбросить все фильтры", schemes.DEFAULT, callbacks.EventFilterReset())
 	kb.AddRow().AddCallback("Назад к списку", schemes.NEGATIVE, callbacks.EventListPage(0))
 	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
 	return kb
+}
+
+// filterBtn возвращает метку с «✓ » и стиль POSITIVE для активной опции.
+func filterBtn(label string, active bool) (string, schemes.Intent) {
+	if active {
+		return "✓ " + label, schemes.POSITIVE
+	}
+	return label, schemes.DEFAULT
 }
 
 func humanFilterLabel(f string) string {

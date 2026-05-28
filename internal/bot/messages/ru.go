@@ -119,8 +119,12 @@ func EventListHeader() string {
 }
 
 // EventFilterMenuHeader — заголовок экрана фильтра.
-func EventFilterMenuHeader() string {
-	return "Выберите формат мероприятий:"
+// summary — строка активных фильтров ("" если ни одного не выбрано).
+func EventFilterMenuHeader(summary string) string {
+	if summary == "" {
+		return "Фильтры: нет активных"
+	}
+	return "Фильтры: " + summary
 }
 
 // EventListItem — одна строка в текстовом списке (если в кнопках не помещается весь заголовок).
