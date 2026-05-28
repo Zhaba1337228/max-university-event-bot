@@ -172,9 +172,8 @@ func (h *RegistrationHandler) onStart(ctx context.Context, chatID, userMaxID, ev
 		return
 	}
 
-	// Согласие есть — сразу к ФИО.
-	_ = h.fsm.Save(ctx, userMaxID, fsm.StateRegFullName, snap.Context)
-	h.sendText(ctx, chatID, messages.AskFullName())
+	// Согласие есть — проверяем сохранённое ФИО.
+	h.proceedToFullNameOrInterest(ctx, chatID, userMaxID, snap, user)
 }
 
 func (h *RegistrationHandler) onConsentYes(ctx context.Context, chatID, userMaxID int64) {
@@ -191,9 +190,8 @@ func (h *RegistrationHandler) onConsentYes(ctx context.Context, chatID, userMaxI
 	}
 
 	snap, _ := h.fsm.Load(ctx, userMaxID)
-	_ = h.fsm.Save(ctx, userMaxID, fsm.StateRegFullName, snap.Context)
 	h.sendText(ctx, chatID, messages.ConsentRecorded())
-	h.sendText(ctx, chatID, messages.AskFullName())
+	h.proceedToFullNameOrInterest(ctx, chatID, userMaxID, snap, user)
 }
 
 func (h *RegistrationHandler) onConsentNo(ctx context.Context, chatID, userMaxID int64) {
@@ -254,7 +252,13 @@ func (h *RegistrationHandler) onConfirm(ctx context.Context, chatID, userMaxID i
 		return
 	}
 
-	// Успех. Получаем событие для красивого ответа.
+	// Успех. Сохраняем ФИО в профиль пользователя для будущих записей.
+	if snap.Context.DraftFullName != "" {
+		if _, err := h.users.EnsureProfile(ctx, userMaxID, snap.Context.DraftFullName, ""); err != nil {
+			h.log.Warn("save full name to profile failed", "err", err)
+		}
+	}
+
 	event, _ := h.events.Get(ctx, snap.Context.CurrentEventID)
 	_ = h.fsm.Reset(ctx, userMaxID)
 
@@ -360,6 +364,24 @@ func (h *RegistrationHandler) onInterest(ctx context.Context, chatID, userMaxID 
 		messages.RegConfirmation(event, snap.Context), keyboards.RegConfirm()); err != nil {
 		h.log.Error("send reg confirmation failed", "err", err)
 	}
+}
+
+// proceedToFullNameOrInterest — переходит к шагу ФИО или сразу к интересу,
+// если ФИО уже сохранено в профиле пользователя.
+func (h *RegistrationHandler) proceedToFullNameOrInterest(
+	ctx context.Context, chatID, userMaxID int64,
+	snap fsm.Snapshot, user *domain.User,
+) {
+	if user != nil && user.FullName != nil && *user.FullName != "" {
+		// ФИО уже сохранено — пропускаем шаг и переходим к интересу.
+		snap.Context.DraftFullName = *user.FullName
+		_ = h.fsm.Save(ctx, userMaxID, fsm.StateRegInterest, snap.Context)
+		h.sendText(ctx, chatID, messages.AskFullNameWithSaved(*user.FullName))
+		return
+	}
+	// ФИО не сохранено — запрашиваем.
+	_ = h.fsm.Save(ctx, userMaxID, fsm.StateRegFullName, snap.Context)
+	h.sendText(ctx, chatID, messages.AskFullName())
 }
 
 // --- helpers ---

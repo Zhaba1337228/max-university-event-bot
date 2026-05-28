@@ -215,6 +215,15 @@ func AskFullName() string {
 	return "Введите ваше ФИО полностью (например: Иванов Иван Иванович)."
 }
 
+// AskFullNameWithSaved — шаг reg_full_name когда ФИО уже сохранено.
+func AskFullNameWithSaved(name string) string {
+	return joinLines(
+		"Используем ваше сохранённое ФИО: «"+name+"».",
+		"",
+		"Какое направление вам интересно?",
+	)
+}
+
 // InvalidFullName — валидация не прошла.
 func InvalidFullName() string {
 	return "Похоже на неполное ФИО. Пожалуйста, отправьте фамилию, имя и отчество одним сообщением."
@@ -613,6 +622,30 @@ func OrganizerOpened() string {
 	return "Регистрация снова открыта."
 }
 
+// OrganizerCancelAsk — подтверждение отмены мероприятия.
+func OrganizerCancelAsk(e *domain.Event) string {
+	return joinLines(
+		"Отменить мероприятие «"+e.Title+"»?",
+		"",
+		"Все записанные участники получат уведомление об отмене.",
+		"Это действие необратимо.",
+	)
+}
+
+// OrganizerEventCancelled — мероприятие успешно отменено.
+func OrganizerEventCancelled(sent int) string {
+	return fmt.Sprintf("Мероприятие отменено. Уведомления отправлены %d участникам.", sent)
+}
+
+// EventCancelledByOrg — сообщение участникам при отмене мероприятия.
+func EventCancelledByOrg(title string) string {
+	return joinLines(
+		"Мероприятие «"+title+"» было отменено организаторами.",
+		"",
+		"Приносим извинения за неудобства. Вы можете выбрать другое мероприятие в главном меню.",
+	)
+}
+
 // =============================================================================
 // Magic-link для входа в админку (День 13)
 // =============================================================================
@@ -654,6 +687,18 @@ func AIWarningNote() string {
 func AIRecommendation(text string) string {
 	return joinLines(
 		"Подобрал для вас:",
+		"",
+		text,
+		"",
+		AIWarningNote(),
+	)
+}
+
+// AIRecommendationPage — заголовок страницы AI-рекомендаций.
+func AIRecommendationPage(page, totalPages int, text string) string {
+	header := fmt.Sprintf("Рекомендации (%d из %d):", page, totalPages)
+	return joinLines(
+		header,
 		"",
 		text,
 		"",

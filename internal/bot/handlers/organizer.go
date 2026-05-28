@@ -29,14 +29,15 @@ type OrganizerHandler struct {
 	role       service.Role
 	events     service.Event
 	ai         service.AI // опционально (для org:ai_summary)
+	notif      service.Notification
 	eventsRepo repo.EventRepo
 	db         repo.Querier
 	log        *slog.Logger
 }
 
-// NewOrganizerHandler — конструктор. ai, eventsRepo, db опциональны.
+// NewOrganizerHandler — конструктор. ai, notif, eventsRepo, db опциональны.
 func NewOrganizerHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
-	role service.Role, events service.Event, ai service.AI,
+	role service.Role, events service.Event, ai service.AI, notif service.Notification,
 	eventsRepo repo.EventRepo, db repo.Querier,
 	log *slog.Logger,
 ) *OrganizerHandler {
@@ -46,6 +47,7 @@ func NewOrganizerHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
 		role:       role,
 		events:     events,
 		ai:         ai,
+		notif:      notif,
 		eventsRepo: eventsRepo,
 		db:         db,
 		log:        log.With("handler", "organizer"),
@@ -313,6 +315,78 @@ func (h *OrganizerHandler) OnCloseCallback(ctx context.Context, upd *schemes.Mes
 		if err := h.api.SendTextWithKeyboard(ctx, chatID,
 			messages.OrganizerOpened(), keyboards.OrganizerEventActions(eventID, ev.Status)); err != nil {
 			h.log.Error("send opened failed", "err", err)
+		}
+
+	default:
+		h.sendFallback(ctx, chatID)
+	}
+}
+
+// OnCancelCallback обрабатывает orgcancel:* — отмену мероприятия с уведомлением участников.
+func (h *OrganizerHandler) OnCancelCallback(ctx context.Context, upd *schemes.MessageCallbackUpdate, p callbacks.Payload) {
+	chatID := upd.Message.Recipient.ChatId
+	userMaxID := upd.Callback.User.UserId
+
+	if err := h.api.AnswerCallback(ctx, upd.Callback.CallbackID, ""); err != nil {
+		h.log.Warn("answer callback failed", "err", err)
+	}
+
+	eventID := p.ArgInt64(0)
+	if eventID <= 0 {
+		h.sendFallback(ctx, chatID)
+		return
+	}
+
+	switch p.Action {
+	case "ask":
+		if _, err := h.role.RequireEventOwner(ctx, userMaxID, eventID); err != nil {
+			h.handleAccessErr(ctx, chatID, err)
+			return
+		}
+		ev, err := h.events.Get(ctx, eventID)
+		if err != nil || ev == nil {
+			h.sendError(ctx, chatID)
+			return
+		}
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.OrganizerCancelAsk(ev), keyboards.OrganizerCancelConfirm(eventID)); err != nil {
+			h.log.Error("send cancel ask failed", "err", err)
+		}
+
+	case "yes":
+		if _, err := h.role.RequireEventOwner(ctx, userMaxID, eventID); err != nil {
+			h.handleAccessErr(ctx, chatID, err)
+			return
+		}
+		ev, err := h.events.Get(ctx, eventID)
+		if err != nil || ev == nil {
+			h.sendError(ctx, chatID)
+			return
+		}
+
+		// Устанавливаем статус cancelled.
+		if h.eventsRepo != nil && h.db != nil {
+			if err := h.eventsRepo.UpdateStatus(ctx, h.db, eventID, domain.EventStatusCancelled); err != nil {
+				h.log.Error("cancel event failed", "err", err)
+				h.sendError(ctx, chatID)
+				return
+			}
+		}
+
+		// Уведомляем участников.
+		sent := 0
+		if h.notif != nil {
+			text := messages.EventCancelledByOrg(ev.Title)
+			var notifErr error
+			sent, notifErr = h.notif.SendBroadcast(ctx, eventID, text)
+			if notifErr != nil {
+				h.log.Warn("cancel broadcast failed", "err", notifErr, "event_id", eventID)
+			}
+		}
+
+		if err := h.api.SendTextWithKeyboard(ctx, chatID,
+			messages.OrganizerEventCancelled(sent), keyboards.MainMenu()); err != nil {
+			h.log.Error("send cancelled msg failed", "err", err)
 		}
 
 	default:

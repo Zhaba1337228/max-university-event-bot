@@ -23,11 +23,12 @@ const (
 	GroupAI       = "ai"
 	GroupWaitlist = "wl"
 	GroupOrg      = "org"
-	GroupOrgList  = "orglist"
-	GroupOrgNotif = "orgnotif"
-	GroupOrgClose = "orgclose"
-	GroupAdmin    = "admin"
-	GroupBack     = "back"
+	GroupOrgList   = "orglist"
+	GroupOrgNotif  = "orgnotif"
+	GroupOrgClose  = "orgclose"
+	GroupOrgCancel = "orgcancel"
+	GroupAdmin     = "admin"
+	GroupBack      = "back"
 )
 
 const (
@@ -112,6 +113,9 @@ func EventShow(id int64) string { return build(GroupEvent, "show", i64(id)) }
 // EventDetails — показать расширенную информацию (кнопка «Подробнее»).
 func EventDetails(id int64) string { return build(GroupEvent, "details", i64(id)) }
 
+// EventFilterSet — применить фильтр по формату (offline/online/hybrid/"" = все).
+func EventFilterSet(format string) string { return build(GroupEvent, "filter", format) }
+
 // --- Регистрация ---
 
 // RegStart — начать запись на событие eventID.
@@ -171,6 +175,9 @@ func CancelNo(regID int64) string { return build(GroupCancel, "no", i64(regID)) 
 // AIPickStart — пригласить пользователя описать интерес.
 func AIPickStart() string { return build(GroupAI, "pick") }
 
+// AIPage — показать страницу AI-рекомендаций с offset.
+func AIPage(offset int) string { return build(GroupAI, "page", itoa(offset)) }
+
 // --- Waitlist ---
 
 // WaitlistJoin — встать в лист ожидания на eventID.
@@ -227,6 +234,12 @@ func OrgOpenAsk(eventID int64) string { return build(GroupOrgClose, "open_ask", 
 
 // OrgOpenYes — подтвердить открытие.
 func OrgOpenYes(eventID int64) string { return build(GroupOrgClose, "open_yes", i64(eventID)) }
+
+// OrgCancelAsk — запросить подтверждение отмены мероприятия.
+func OrgCancelAsk(eventID int64) string { return build(GroupOrgCancel, "ask", i64(eventID)) }
+
+// OrgCancelYes — подтвердить отмену мероприятия.
+func OrgCancelYes(eventID int64) string { return build(GroupOrgCancel, "yes", i64(eventID)) }
 
 // --- Admin ---
 

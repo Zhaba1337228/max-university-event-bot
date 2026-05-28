@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -18,12 +19,14 @@ import (
 	"github.com/Zhaba1337228/max-university-event-bot/internal/service"
 )
 
+const aiPageSize = 3
+
 // AIPickHandler — «Подобрать через AI» в главном меню.
 //
 // UX:
 //  1. main → callback ai:pick → AIAskInterest + state=ai_pick_intent.
 //  2. text input → RecommendEvents(text, openEvents) → список рекомендаций
-//     с inline-кнопками «Записаться» на каждое.
+//     с inline-кнопками «Записаться» на каждое, постраничная навигация.
 //  3. На fallback (AI off / parse fail) → AIUnavailable + обычный список.
 type AIPickHandler struct {
 	api    *maxclient.Client
@@ -46,7 +49,7 @@ func NewAIPickHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
 	}
 }
 
-// OnCallback — ai:pick.
+// OnCallback — ai:pick и ai:page.
 func (h *AIPickHandler) OnCallback(ctx context.Context, upd *schemes.MessageCallbackUpdate, p callbacks.Payload) {
 	chatID := upd.Message.Recipient.ChatId
 	userMaxID := upd.Callback.User.UserId
@@ -54,19 +57,30 @@ func (h *AIPickHandler) OnCallback(ctx context.Context, upd *schemes.MessageCall
 	if err := h.api.AnswerCallback(ctx, upd.Callback.CallbackID, ""); err != nil {
 		h.log.Warn("answer callback failed", "err", err)
 	}
-	if p.Action != "pick" {
-		return
-	}
 
-	if h.ai == nil {
-		// AI выключен — сразу обычный список.
-		h.fallbackList(ctx, chatID)
-		return
-	}
+	switch p.Action {
+	case "pick":
+		if h.ai == nil {
+			h.fallbackList(ctx, chatID)
+			return
+		}
+		_ = h.fsm.Save(ctx, userMaxID, fsm.StateAIPickIntent, fsm.UserFSMContext{})
+		if err := h.api.SendText(ctx, chatID, messages.AIAskInterest()); err != nil {
+			h.log.Error("send ai ask failed", "err", err)
+		}
 
-	_ = h.fsm.Save(ctx, userMaxID, fsm.StateAIPickIntent, fsm.UserFSMContext{})
-	if err := h.api.SendText(ctx, chatID, messages.AIAskInterest()); err != nil {
-		h.log.Error("send ai ask failed", "err", err)
+	case "page":
+		offset := int(p.ArgInt64(0))
+		snap, _ := h.fsm.Load(ctx, userMaxID)
+		if len(snap.Context.AIRecommIDs) == 0 {
+			// Рекомендации протухли — показываем главное меню.
+			if err := h.api.SendTextWithKeyboard(ctx, chatID,
+				messages.FallbackUnknown(), keyboards.MainMenu()); err != nil {
+				h.log.Error("send fallback failed", "err", err)
+			}
+			return
+		}
+		h.showAIPage(ctx, chatID, userMaxID, snap.Context.AIRecommIDs, offset)
 	}
 }
 
@@ -103,26 +117,67 @@ func (h *AIPickHandler) OnText(ctx context.Context, upd *schemes.MessageCreatedU
 		return
 	}
 
-	_ = h.fsm.Reset(ctx, userMaxID)
+	if len(recs) == 0 {
+		_ = h.fsm.Reset(ctx, userMaxID)
+		h.sendText(ctx, chatID, "По вашему запросу ничего не найдено. Покажу общий список.")
+		h.fallbackList(ctx, chatID)
+		return
+	}
 
-	// Собираем текст + клавиатуру с кнопкой «Записаться» на каждую рекомендацию.
+	// Сохраняем ID рекомендаций в FSM для постраничной навигации.
+	ids := make([]int64, 0, len(recs))
+	for _, r := range recs {
+		ids = append(ids, r.EventID)
+	}
+	_ = h.fsm.Save(ctx, userMaxID, fsm.StateAIResults, fsm.UserFSMContext{
+		AIRecommIDs: ids,
+		AIOffset:    0,
+	})
+
+	h.showAIPage(ctx, chatID, userMaxID, ids, 0)
+}
+
+// showAIPage показывает страницу AI-рекомендаций с пагинацией.
+func (h *AIPickHandler) showAIPage(ctx context.Context, chatID, userMaxID int64, ids []int64, offset int) {
+	total := len(ids)
+	end := offset + aiPageSize
+	if end > total {
+		end = total
+	}
+	pageIDs := ids[offset:end]
+	hasMore := end < total
+	hasPrev := offset > 0
+
+	totalPages := (total + aiPageSize - 1) / aiPageSize
+	currentPage := offset/aiPageSize + 1
+
 	var sb strings.Builder
 	kb := &maxbot.Keyboard{}
-	for i, r := range recs {
-		sb.WriteString(strings.TrimSpace(r.Title))
-		sb.WriteString("\n")
-		if r.Reason != "" {
-			sb.WriteString(r.Reason)
-			sb.WriteString("\n")
+
+	for _, id := range pageIDs {
+		ev, err := h.events.Get(ctx, id)
+		if err != nil || ev == nil {
+			continue
 		}
-		sb.WriteString("\n")
-		_ = i
-		kb.AddRow().AddCallback(r.Title, schemes.POSITIVE, callbacks.EventShow(r.EventID))
+		sb.WriteString(fmt.Sprintf("• %s\n", ev.Title))
+		kb.AddRow().AddCallback(ev.Title, schemes.POSITIVE, callbacks.EventShow(id))
+	}
+
+	// Навигационный ряд.
+	if hasPrev || hasMore {
+		navRow := kb.AddRow()
+		if hasPrev {
+			navRow.AddCallback("◀ Назад", schemes.DEFAULT, callbacks.AIPage(offset-aiPageSize))
+		}
+		if hasMore {
+			navRow.AddCallback("Вперёд ▶", schemes.DEFAULT, callbacks.AIPage(offset+aiPageSize))
+		}
 	}
 	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
 
-	if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.AIRecommendation(sb.String()), kb); err != nil {
-		h.log.Error("send ai recs failed", "err", err)
+	text := messages.AIRecommendationPage(currentPage, totalPages, sb.String())
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, text, kb); err != nil {
+		h.log.Error("send ai page failed", "err", err)
 	}
 }
 
@@ -146,7 +201,7 @@ func (h *AIPickHandler) fallbackList(ctx context.Context, chatID int64) {
 		sb.WriteString("\n")
 		events = append(events, it.Event)
 	}
-	kb := keyboards.EventList(events, 0, total > 8)
+	kb := keyboards.EventList(events, 0, total > 8, "")
 	if err := h.api.SendTextWithKeyboard(ctx, chatID, sb.String(), kb); err != nil {
 		h.log.Error("send fallback list failed", "err", err)
 	}

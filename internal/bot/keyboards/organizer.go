@@ -35,9 +35,20 @@ func OrganizerEventActions(eventID int64, status domain.EventStatus) *maxbot.Key
 	} else if status == domain.EventStatusClosed {
 		kb.AddRow().AddCallback("Открыть регистрацию", schemes.POSITIVE, callbacks.OrgOpenAsk(eventID))
 	}
+	if status != domain.EventStatusCancelled && status != domain.EventStatusFinished {
+		kb.AddRow().AddCallback("Отменить мероприятие", schemes.NEGATIVE, callbacks.OrgCancelAsk(eventID))
+	}
 	kb.AddRow().AddCallback("К списку мероприятий", schemes.DEFAULT, callbacks.OrgEntry())
 	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
 	return kb
+}
+
+// OrganizerCancelConfirm — подтверждение отмены мероприятия.
+func OrganizerCancelConfirm(eventID int64) *maxbot.Keyboard {
+	return YesNo(
+		"Да, отменить", callbacks.OrgCancelYes(eventID),
+		"Отмена", callbacks.OrgStats(eventID),
+	)
 }
 
 // OrganizerParticipants — навигация по постраничному списку участников.

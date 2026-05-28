@@ -32,6 +32,7 @@ const (
 	StateForgetMeConfirm      = "forget_me_confirm"
 
 	StateAIPickIntent = "ai_pick_intent"
+	StateAIResults    = "ai_results"
 )
 
 // Состояния организаторского сценария.

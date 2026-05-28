@@ -318,6 +318,50 @@ func (s *Server) handleEventOpen(w http.ResponseWriter, r *http.Request) {
 	s.handleEventUpdateStatus(w, r, domain.EventStatusOpen)
 }
 
+// handleEventCancel — POST /api/events/:id/cancel.
+// Отменяет мероприятие и рассылает уведомление всем зарегистрированным участникам.
+// Доступ: organizer-owner или admin.
+func (s *Server) handleEventCancel(w http.ResponseWriter, r *http.Request) {
+	c, _ := claimsFromContext(r.Context())
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, errResp("bad_id", "Некорректный id"))
+		return
+	}
+	if !ownsEvent(r, s, c.UserID, c.Role, id) {
+		writeJSON(w, http.StatusForbidden, errResp("forbidden", "Нет доступа"))
+		return
+	}
+
+	ev, err := s.deps.Events.Get(r.Context(), id)
+	if err != nil || ev == nil {
+		writeJSON(w, http.StatusNotFound, errResp("not_found", "Событие не найдено"))
+		return
+	}
+	if ev.Status == domain.EventStatusCancelled {
+		writeJSON(w, http.StatusConflict, errResp("already_cancelled", "Мероприятие уже отменено"))
+		return
+	}
+
+	if err := s.deps.EventsRepo.UpdateStatus(r.Context(), s.deps.DB, id, domain.EventStatusCancelled); err != nil {
+		s.log.Error("cancel event failed", "err", err, "event_id", id)
+		writeJSON(w, http.StatusInternalServerError, errResp("db", "Ошибка обновления"))
+		return
+	}
+
+	// Рассылка участникам.
+	sent := 0
+	if s.deps.Notification != nil {
+		text := fmt.Sprintf("Мероприятие «%s» было отменено организаторами. Приносим извинения за неудобства.", ev.Title)
+		sent, _ = s.deps.Notification.SendBroadcast(r.Context(), id, text)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"event": eventToDTO(ev),
+		"notified_count": sent,
+	})
+}
+
 func (s *Server) handleEventUpdateStatus(w http.ResponseWriter, r *http.Request, status domain.EventStatus) {
 	c, _ := claimsFromContext(r.Context())
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

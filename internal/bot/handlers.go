@@ -82,7 +82,7 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 	h.Cancel = handlers.NewCancelHandler(cfg.API, cfg.FSM,
 		cfg.Registration, cfg.Users, cfg.Events, cfg.Log)
 	h.Waitlist = handlers.NewWaitlistHandler(cfg.API, cfg.FSM, h.Registration, cfg.Log)
-	h.Organizer = handlers.NewOrganizerHandler(cfg.API, cfg.FSM, cfg.Role, cfg.Events, cfg.AI,
+	h.Organizer = handlers.NewOrganizerHandler(cfg.API, cfg.FSM, cfg.Role, cfg.Events, cfg.AI, cfg.Notification,
 		cfg.EventsRepo, cfg.DB, cfg.Log)
 	h.OrganizerList = handlers.NewOrganizerListHandler(cfg.API, cfg.FSM, cfg.Role,
 		cfg.Events, cfg.RegsRepo, cfg.DB, cfg.Log)
@@ -182,6 +182,8 @@ func (h *Handlers) RouteCallback(ctx context.Context, upd *schemes.MessageCallba
 		h.OrgNotify.OnCallback(ctx, upd, p)
 	case callbacks.GroupOrgClose:
 		h.Organizer.OnCloseCallback(ctx, upd, p)
+	case callbacks.GroupOrgCancel:
+		h.Organizer.OnCancelCallback(ctx, upd, p)
 	case callbacks.GroupAI:
 		if h.AIPick != nil {
 			h.AIPick.OnCallback(ctx, upd, p)

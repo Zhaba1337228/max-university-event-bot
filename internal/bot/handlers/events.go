@@ -66,6 +66,13 @@ func (h *EventsHandler) OnCallback(ctx context.Context, upd *schemes.MessageCall
 	case "details":
 		eventID := p.ArgInt64(0)
 		h.showDetails(ctx, chatID, userID, eventID)
+	case "filter":
+		filterFormat := p.ArgString(0)
+		snap, _ := h.fsm.Load(ctx, userID)
+		snap.Context.EventFilter = filterFormat
+		snap.Context.Offset = 0
+		_ = h.fsm.Save(ctx, userID, fsm.StateEventList, snap.Context)
+		h.showList(ctx, chatID, userID, 0)
 	default:
 		h.log.Debug("unknown ev action", "action", p.Action)
 		if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.FallbackUnknown(), keyboards.MainMenu()); err != nil {
@@ -77,16 +84,53 @@ func (h *EventsHandler) OnCallback(ctx context.Context, upd *schemes.MessageCall
 func (h *EventsHandler) showList(ctx context.Context, chatID, userID int64, offset int) {
 	pageSize := keyboards.PageSize()
 
-	items, total, err := h.events.ListOpen(ctx, pageSize, offset)
-	if err != nil {
-		h.log.Error("list events failed", "err", err)
-		if sendErr := h.api.SendTextWithKeyboard(ctx, chatID, messages.ErrorTryLater(), keyboards.MainMenu()); sendErr != nil {
-			h.log.Error("send error msg failed", "err", sendErr)
+	// Загружаем FSM для получения активного фильтра.
+	snap, _ := h.fsm.Load(ctx, userID)
+	filter := snap.Context.EventFilter
+
+	var pageItems []service.EventWithFree
+	var hasMore bool
+
+	if filter != "" {
+		// Фильтруем по формату: грузим большой батч, режем в памяти.
+		all, _, err := h.events.ListOpen(ctx, 200, 0)
+		if err != nil {
+			h.log.Error("list events failed", "err", err)
+			if sendErr := h.api.SendTextWithKeyboard(ctx, chatID, messages.ErrorTryLater(), keyboards.MainMenu()); sendErr != nil {
+				h.log.Error("send error msg failed", "err", sendErr)
+			}
+			return
 		}
-		return
+		var filtered []service.EventWithFree
+		for _, it := range all {
+			if string(it.Event.Format) == filter {
+				filtered = append(filtered, it)
+			}
+		}
+		start := offset
+		if start > len(filtered) {
+			start = len(filtered)
+		}
+		end := start + pageSize
+		if end > len(filtered) {
+			end = len(filtered)
+		}
+		pageItems = filtered[start:end]
+		hasMore = end < len(filtered)
+	} else {
+		items, total, err := h.events.ListOpen(ctx, pageSize, offset)
+		if err != nil {
+			h.log.Error("list events failed", "err", err)
+			if sendErr := h.api.SendTextWithKeyboard(ctx, chatID, messages.ErrorTryLater(), keyboards.MainMenu()); sendErr != nil {
+				h.log.Error("send error msg failed", "err", sendErr)
+			}
+			return
+		}
+		pageItems = items
+		hasMore = offset+pageSize < total
 	}
 
-	if len(items) == 0 {
+	if len(pageItems) == 0 {
 		if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.EventListEmpty(), keyboards.MainMenu()); err != nil {
 			h.log.Error("send empty list failed", "err", err)
 		}
@@ -95,18 +139,15 @@ func (h *EventsHandler) showList(ctx context.Context, chatID, userID int64, offs
 
 	// Сохраняем offset в FSM, чтобы из карточки кнопка «Назад к списку»
 	// возвращала пользователя на ту же страницу.
-	snap, _ := h.fsm.Load(ctx, userID)
 	snap.Context.Offset = offset
 	_ = h.fsm.Save(ctx, userID, fsm.StateEventList, snap.Context)
-
-	hasMore := offset+pageSize < total
 
 	// Текстовый список + клавиатура.
 	var b strings.Builder
 	b.WriteString(messages.EventListHeader())
 	b.WriteString("\n\n")
-	events := make([]*domain.Event, 0, len(items))
-	for i, it := range items {
+	events := make([]*domain.Event, 0, len(pageItems))
+	for i, it := range pageItems {
 		b.WriteString(messages.EventListItem(i+offset, it.Event))
 		if it.FreeSeats == 0 {
 			b.WriteString(" (мест нет)")
@@ -115,7 +156,7 @@ func (h *EventsHandler) showList(ctx context.Context, chatID, userID int64, offs
 		events = append(events, it.Event)
 	}
 
-	kb := keyboards.EventList(events, offset, hasMore)
+	kb := keyboards.EventList(events, offset, hasMore, filter)
 	if err := h.api.SendTextWithKeyboard(ctx, chatID, b.String(), kb); err != nil {
 		h.log.Error("send list failed", "err", err)
 	}

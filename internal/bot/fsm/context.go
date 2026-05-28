@@ -24,6 +24,13 @@ type UserFSMContext struct {
 
 	// Pagination.
 	Offset int `json:"offset,omitempty"`
+
+	// Event list filter (format: "offline", "online", "hybrid", "" = all).
+	EventFilter string `json:"event_filter,omitempty"`
+
+	// AI recommendations pagination.
+	AIRecommIDs []int64 `json:"ai_recomm_ids,omitempty"`
+	AIOffset    int     `json:"ai_offset,omitempty"`
 }
 
 // Marshal сериализует контекст в JSON для хранения в БД.

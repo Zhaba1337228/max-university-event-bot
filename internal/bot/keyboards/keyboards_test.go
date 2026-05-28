@@ -31,11 +31,11 @@ func TestMainMenuStructure(t *testing.T) {
 func TestEventListEmpty(t *testing.T) {
 	t.Parallel()
 
-	kb := keyboards.EventList(nil, 0, false)
+	kb := keyboards.EventList(nil, 0, false, "")
 	rows := kb.Build().Buttons
-	// Без пустых рядов: только «в главное меню».
-	if len(rows) != 1 {
-		t.Errorf("want 1 row for empty list, got %d", len(rows))
+	// Ряд фильтров + «в главное меню».
+	if len(rows) != 2 {
+		t.Errorf("want 2 rows for empty list (filter+menu), got %d", len(rows))
 	}
 }
 
@@ -46,12 +46,12 @@ func TestEventListWithPaging(t *testing.T) {
 		{ID: 1, Title: "A"},
 		{ID: 2, Title: "B"},
 	}
-	kb := keyboards.EventList(events, 8, true)
+	kb := keyboards.EventList(events, 8, true, "")
 	rows := kb.Build().Buttons
 
-	// 2 события + ряд навигации (Back+Дальше) + ряд "В главное меню" = 4
-	if len(rows) != 4 {
-		t.Errorf("want 4 rows, got %d", len(rows))
+	// 2 события + ряд навигации (Back+Дальше) + ряд фильтров + ряд "В главное меню" = 5
+	if len(rows) != 5 {
+		t.Errorf("want 5 rows, got %d", len(rows))
 	}
 	// в навигации должно быть 2 кнопки
 	navRow := rows[2]

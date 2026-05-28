@@ -16,7 +16,8 @@ const pageSize = 8
 // events — срез, уже отрезанный по странице (т.е. длиной ≤ pageSize).
 // offset — текущий offset (нужен для расчёта next/prev).
 // hasMore — есть ли страница дальше.
-func EventList(events []*domain.Event, offset int, hasMore bool) *maxbot.Keyboard {
+// activeFilter — активный фильтр формата ("offline"/"online"/"hybrid"/"" = все).
+func EventList(events []*domain.Event, offset int, hasMore bool, activeFilter string) *maxbot.Keyboard {
 	kb := newKB()
 
 	for _, e := range events {
@@ -29,13 +30,33 @@ func EventList(events []*domain.Event, offset int, hasMore bool) *maxbot.Keyboar
 		if navRow == nil {
 			navRow = kb.AddRow()
 		}
-		navRow.AddCallback("Назад", schemes.DEFAULT, callbacks.EventListPage(offset-pageSize))
+		navRow.AddCallback("◀ Назад", schemes.DEFAULT, callbacks.EventListPage(offset-pageSize))
 	}
 	if hasMore {
 		if navRow == nil {
 			navRow = kb.AddRow()
 		}
-		navRow.AddCallback("Дальше", schemes.DEFAULT, callbacks.EventListPage(offset+pageSize))
+		navRow.AddCallback("Вперёд ▶", schemes.DEFAULT, callbacks.EventListPage(offset+pageSize))
+	}
+
+	// Фильтр по формату.
+	filterRow := kb.AddRow()
+	allStyle := schemes.DEFAULT
+	if activeFilter == "" {
+		allStyle = schemes.POSITIVE
+	}
+	filterRow.AddCallback("Все", allStyle, callbacks.EventFilterSet(""))
+
+	for _, f := range []struct{ label, format string }{
+		{"Очно", "offline"},
+		{"Онлайн", "online"},
+		{"Гибрид", "hybrid"},
+	} {
+		style := schemes.DEFAULT
+		if activeFilter == f.format {
+			style = schemes.POSITIVE
+		}
+		filterRow.AddCallback(f.label, style, callbacks.EventFilterSet(f.format))
 	}
 
 	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())

@@ -1,6 +1,7 @@
 package fsm_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 		t.Fatal("Marshal returned empty bytes")
 	}
 	got := fsm.Unmarshal(raw)
-	if got != original {
+	if !reflect.DeepEqual(got, original) {
 		t.Fatalf("round-trip mismatch:\nwant: %+v\ngot:  %+v", original, got)
 	}
 }
@@ -60,7 +61,7 @@ func TestUnmarshalEmpty(t *testing.T) {
 	}
 	for _, in := range cases {
 		got := fsm.Unmarshal(in)
-		if got != (fsm.UserFSMContext{}) && got.CurrentEventID != 0 {
+		if got.CurrentEventID != 0 {
 			t.Errorf("expected zero context for input %q, got %+v", string(in), got)
 		}
 	}
@@ -72,7 +73,7 @@ func TestReset(t *testing.T) {
 
 	ctx := fsm.UserFSMContext{CurrentEventID: 1, DraftFullName: "A B"}
 	ctx.Reset()
-	if ctx != (fsm.UserFSMContext{}) {
+	if !reflect.DeepEqual(ctx, fsm.UserFSMContext{}) {
 		t.Fatalf("Reset did not zero context: %+v", ctx)
 	}
 }
