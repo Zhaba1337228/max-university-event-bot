@@ -31,6 +31,10 @@ coverage.html
 *.swp
 *.swo
 
+# Claude Code / omc
+.claude/
+.omc/
+
 # OS
 .DS_Store
 Thumbs.db

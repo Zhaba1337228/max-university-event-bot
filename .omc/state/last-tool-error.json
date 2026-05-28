@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"go test ./internal/bot/keyboards/... -v -run TestMainMenuStructure 2>&1\",\"description\":\"Run failing MainMenu test with verbose output\"}",
-  "error": "Exit code 1\n=== RUN   TestMainMenuStructure\n=== PAUSE TestMainMenuStructure\n=== CONT  TestMainMenuStructure\n    keyboards_test.go:27: MainMenu: want 4 rows, got 5\n--- FAIL: TestMainMenuStructure (0.00s)\nFAIL\nFAIL\tgithub.com/Zhaba1337228/max-university-event-bot/internal/bot/keyboards\t0.011s\nFAIL",
-  "timestamp": "2026-05-28T17:53:23.183Z",
-  "retry_count": 1
-}
