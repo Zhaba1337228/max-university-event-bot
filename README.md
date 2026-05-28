@@ -21,12 +21,16 @@
 - учёт мест и автопромоут из waitlist;
 - напоминания о регистрации за 24 часа и за 1 час до начала;
 - `/forget_me` с реальным каскадным удалением данных пользователя;
-- AI-подбор мероприятий по интересу через GigaChat.
+- AI-подбор мероприятий по интересу через GigaChat;
+- AI FAQ: кнопка «Задать вопрос ИИ» — ответ на основе актуального расписания;
+- персональная лента: после check-in бот присылает похожие мероприятия.
 
 **Веб-админка**
 
 - magic-link вход из бота через `/admin_login`;
 - список своих мероприятий, создание и редактирование;
+- AI-генерация описания события по названию и подсказке (кнопка «✨ Сгенерировать описание»);
+- AI-подбор тегов по названию и описанию (кнопка «✨ Предложить теги»);
 - список участников, поиск и фильтры;
 - check-in по QR-коду или короткому коду записи;
 - рассылка участникам;
@@ -74,14 +78,12 @@ make docker-up
 ## Полезные переменные окружения
 
 ```bash
-DEFAULT_EVENT_REMINDER_HOURS=24,1
-WAITLIST_ENABLED=true
-WAITLIST_AUTO_PROMOTE=true
-NOTIFICATION_BATCH_SIZE=50
-NOTIFICATION_RATE_LIMIT_RPS=20
-ORGANIZER_USER_IDS=
-STAFF_USER_IDS=
-ADMIN_USER_IDS=
+AI_EVENT_RECOMMENDER_ENABLED=true
+AI_NOTIFICATION_REWRITER_ENABLED=true
+AI_ORGANIZER_SUMMARY_ENABLED=true
+AI_FAQ_ENABLED=true   # AI FAQ в боте (кнопка «Задать вопрос ИИ»; false — кнопка скрыта)
+AI_REQUEST_TIMEOUT=15s
+AI_MAX_TOKENS=512
 ```
 
 ## Makefile

@@ -102,7 +102,7 @@ type AIConfig struct {
 	RecommenderEnabled bool          `env:"EVENT_RECOMMENDER_ENABLED"     envDefault:"true"`
 	RewriterEnabled    bool          `env:"NOTIFICATION_REWRITER_ENABLED" envDefault:"true"`
 	SummaryEnabled     bool          `env:"ORGANIZER_SUMMARY_ENABLED"     envDefault:"true"`
-	FAQEnabled         bool          `env:"FAQ_ENABLED"                   envDefault:"false"`
+	FAQEnabled         bool          `env:"FAQ_ENABLED"                   envDefault:"true"`
 	RequestTimeout     time.Duration `env:"REQUEST_TIMEOUT"               envDefault:"15s"`
 	MaxTokens          int           `env:"MAX_TOKENS"                    envDefault:"512"`
 }

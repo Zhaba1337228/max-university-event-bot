@@ -10,6 +10,7 @@ import (
 
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/fsm"
+	"github.com/Zhaba1337228/max-university-event-bot/internal/bot/keyboards"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/gigachat"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/external/maxclient"
 	"github.com/Zhaba1337228/max-university-event-bot/internal/repo"
@@ -178,6 +179,7 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 	}
 
 	// 6. Handlers + Dispatcher + Long-poll runner
+	keyboards.SetFAQEnabled(cfg.AI.FAQEnabled)
 	handlers := bot.NewHandlers(bot.HandlersConfig{
 		API:             mc,
 		Log:             log,
@@ -195,6 +197,7 @@ func New(ctx context.Context, cfg *Config, log *slog.Logger) (*App, error) {
 		EventsRepo:      eventsRepo,
 		DB:              pool,
 		WaitlistEnabled: cfg.Business.WaitlistEnabled,
+		FAQEnabled:      cfg.AI.FAQEnabled,
 		PolicyVersion:   cfg.Policy.PrivacyPolicyVersion,
 		WebBaseURL:      cfg.Admin.WebBaseURL,
 	})

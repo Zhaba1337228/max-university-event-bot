@@ -18,24 +18,29 @@ import (
 
 // AIFAQHandler — «Задать вопрос ИИ» в главном меню.
 type AIFAQHandler struct {
-	api    *maxclient.Client
-	fsm    *fsm.Manager
-	ai     service.AI
-	events service.Event
-	log    *slog.Logger
+	api        *maxclient.Client
+	fsm        *fsm.Manager
+	ai         service.AI
+	events     service.Event
+	faqEnabled bool
+	log        *slog.Logger
 }
 
 func NewAIFAQHandler(api *maxclient.Client, fsmMgr *fsm.Manager,
-	ai service.AI, events service.Event, log *slog.Logger,
+	ai service.AI, events service.Event, faqEnabled bool, log *slog.Logger,
 ) *AIFAQHandler {
 	return &AIFAQHandler{
-		api:    api,
-		fsm:    fsmMgr,
-		ai:     ai,
-		events: events,
-		log:    log.With("handler", "ai_faq"),
+		api:        api,
+		fsm:        fsmMgr,
+		ai:         ai,
+		events:     events,
+		faqEnabled: faqEnabled,
+		log:        log.With("handler", "ai_faq"),
 	}
 }
+
+// Enabled сообщает, включён ли FAQ — используется для показа кнопки в меню.
+func (h *AIFAQHandler) Enabled() bool { return h.faqEnabled }
 
 // OnCallback — ai:faq.
 func (h *AIFAQHandler) OnCallback(ctx context.Context, upd *schemes.MessageCallbackUpdate, _ callbacks.Payload) {
@@ -46,7 +51,7 @@ func (h *AIFAQHandler) OnCallback(ctx context.Context, upd *schemes.MessageCallb
 		h.log.Warn("answer callback failed", "err", err)
 	}
 
-	if h.ai == nil {
+	if !h.faqEnabled || h.ai == nil {
 		if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.AIFAQUnavailable(), keyboards.MainMenu()); err != nil {
 			h.log.Error("send faq unavailable failed", "err", err)
 		}

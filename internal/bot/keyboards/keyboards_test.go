@@ -22,10 +22,19 @@ func rowsCount(kb interface {
 func TestMainMenuStructure(t *testing.T) {
 	t.Parallel()
 
+	// faqEnabled=false (default) → 4 rows
+	keyboards.SetFAQEnabled(false)
 	kb := keyboards.MainMenu()
-	if rows := rowsCount(kb); rows != 5 {
-		t.Errorf("MainMenu: want 5 rows, got %d", rows)
+	if rows := rowsCount(kb); rows != 4 {
+		t.Errorf("MainMenu(faq=off): want 4 rows, got %d", rows)
 	}
+	// faqEnabled=true → 5 rows
+	keyboards.SetFAQEnabled(true)
+	kb2 := keyboards.MainMenu()
+	if rows := rowsCount(kb2); rows != 5 {
+		t.Errorf("MainMenu(faq=on): want 5 rows, got %d", rows)
+	}
+	keyboards.SetFAQEnabled(false)
 }
 
 func TestEventListEmpty(t *testing.T) {

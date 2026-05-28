@@ -59,6 +59,7 @@ type HandlersConfig struct {
 	EventsRepo      repo.EventRepo
 	DB              repo.Querier
 	WaitlistEnabled bool
+	FAQEnabled      bool
 	PolicyVersion   string
 	WebBaseURL      string
 }
@@ -90,7 +91,7 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 	h.OrgNotify = handlers.NewOrganizerNotifyHandler(cfg.API, cfg.FSM, cfg.Role,
 		cfg.Events, cfg.Notification, cfg.AI, cfg.RegsRepo, cfg.DB, cfg.Log)
 	h.AIPick = handlers.NewAIPickHandler(cfg.API, cfg.FSM, cfg.AI, cfg.Events, cfg.Log)
-	h.AIFAQ = handlers.NewAIFAQHandler(cfg.API, cfg.FSM, cfg.AI, cfg.Events, cfg.Log)
+	h.AIFAQ = handlers.NewAIFAQHandler(cfg.API, cfg.FSM, cfg.AI, cfg.Events, cfg.FAQEnabled, cfg.Log)
 	if cfg.Auth != nil {
 		h.AdminLogin = handlers.NewAdminLoginHandler(cfg.API, cfg.Auth, cfg.WebBaseURL, cfg.Log)
 	}
