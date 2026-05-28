@@ -524,7 +524,7 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 	if !res.AlreadyDone && s.deps.AI != nil && s.deps.Notification != nil {
 		reg := res.Registration
 		ev := res.Event
-		go func() { //nolint:gosec // G118: горутина намеренно использует независимый контекст — запрос уже завершён
+		go func() { //#nosec G118 -- intentional: request already completed, independent context required
 			ctx2, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 			items, _, err := s.deps.Events.ListOpen(ctx2, 50, 0)
