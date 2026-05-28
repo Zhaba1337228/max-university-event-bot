@@ -351,6 +351,37 @@
 
 ---
 
+## Post-release улучшения ✅
+
+### Многомерные фильтры мероприятий
+
+- [x] Фильтры вынесены на отдельный экран (кнопка «Фильтры» в списке → `ev:filters_open`)
+- [x] Четыре независимых измерения фильтрации:
+  - формат: Очно / Онлайн / Гибрид / Все
+  - время: Сегодня / Эта неделя / Любое
+  - места: Только свободные / Все
+  - тема: IT / Карьера / Хакатон / Поступление / Олимпиада / DevOps
+- [x] При активных фильтрах: загружается 200 событий, фильтрация в памяти, пагинация результата
+- [x] FSM хранит все 4 параметра фильтра: `EventFilter`, `EventTimeFilter`, `EventSeatsOnly`, `EventTagFilter`
+- [x] Кнопка «Фильтры» в списке подсвечивается как POSITIVE и показывает сводку (`N активных`)
+- [x] «Сбросить все фильтры» одним нажатием
+- [x] Новые callback-конструкторы: `EventFiltersOpen`, `EventFilterTime`, `EventFilterSeats`, `EventFilterTag`, `EventFilterReset`
+
+### Удаление мероприятий
+
+- [x] `repo.EventRepo.Delete` — DELETE FROM events WHERE id = $1
+- [x] `DELETE /api/events/{id}` в admin REST API (owner или admin, 204 No Content)
+- [x] Веб-админка `/events/[id]` — карточка удаления с двухшаговым подтверждением
+- [x] После удаления — редирект на `/events`
+
+### Ограничение регистрации по времени
+
+- [x] `repo.events.ListOpen`: `WHERE status = 'open' AND starts_at > NOW()` — начатые события не попадают в список
+- [x] `service.GetOpen`: дополнительная проверка `!e.StartsAt.IsZero() && e.StartsAt.Before(time.Now())` — защита от deep-link на уже начавшееся событие
+- [x] Тест `TestGetOpenFreeSeatsNotNegative` обновлён: guard `!IsZero()` корректно обходит zero-time в тестах
+
+---
+
 ## Чеклист готовности к демо (см. план §24) ✅
 
 ### Технический (бот)
