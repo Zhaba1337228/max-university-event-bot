@@ -50,6 +50,7 @@ type EventRepo interface {
 	UpdateStatus(ctx context.Context, q Querier, id int64, st domain.EventStatus) error
 	Update(ctx context.Context, q Querier, e *domain.Event) error
 	UpdateShortSummary(ctx context.Context, q Querier, id int64, summary string) error
+	Delete(ctx context.Context, q Querier, id int64) error
 	Stats(ctx context.Context, q Querier, eventID int64) (*domain.EventStats, error)
 }
 

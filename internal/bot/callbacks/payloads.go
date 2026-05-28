@@ -116,6 +116,21 @@ func EventDetails(id int64) string { return build(GroupEvent, "details", i64(id)
 // EventFilterSet — применить фильтр по формату (offline/online/hybrid/"" = все).
 func EventFilterSet(format string) string { return build(GroupEvent, "filter", format) }
 
+// EventFiltersOpen — открыть экран выбора фильтра.
+func EventFiltersOpen() string { return build(GroupEvent, "filters_open") }
+
+// EventFilterTime — фильтр по времени (today/week/"" = любое).
+func EventFilterTime(period string) string { return build(GroupEvent, "filter_time", period) }
+
+// EventFilterSeats — фильтр по наличию мест ("1" = только с местами, "" = все).
+func EventFilterSeats(v string) string { return build(GroupEvent, "filter_seats", v) }
+
+// EventFilterTag — фильтр по тегу (it/карьера/хакатон/поступление/"" = все).
+func EventFilterTag(tag string) string { return build(GroupEvent, "filter_tag", tag) }
+
+// EventFilterReset — сбросить все фильтры.
+func EventFilterReset() string { return build(GroupEvent, "filter_reset") }
+
 // --- Регистрация ---
 
 // RegStart — начать запись на событие eventID.

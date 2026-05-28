@@ -14,9 +14,8 @@ import {
   IconSearch,
   IconShield,
   IconUser,
-  IconArrowLeft,
-  IconArrowRight,
 } from "@/components/ui/icons";
+import { Pagination } from "@/components/ui/pagination";
 
 const ADMIN_ROLES: Role[] = ["applicant", "organizer", "staff", "admin"];
 const ORGANIZER_ROLES: Role[] = ["applicant", "staff"];
@@ -111,7 +110,6 @@ export default function UsersPage() {
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
-  const hasNext = offset + items.length < total;
 
   const isMyself = useMemo(
     () => (uid: number) => me?.user.id === uid,
@@ -181,69 +179,49 @@ export default function UsersPage() {
           </CardTitle>
         </CardHeader>
         <CardBody>
-          {/* Search / filters */}
-          <form
-            onSubmit={onSearch}
-            className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center"
-          >
-            <div className="relative flex-1">
-              <IconSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
-              <Input
-                placeholder="Поиск по MAX ID, ФИО, телефону или email"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="pl-8"
-              />
+          {/* Search + role filter pills */}
+          <form onSubmit={onSearch} className="mb-4 flex flex-col gap-3">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <IconSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
+                <Input
+                  placeholder="Поиск по MAX ID, ФИО, телефону или email"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <Button type="submit" className="gap-1.5 shrink-0">
+                <IconSearch size={13} />
+                Найти
+              </Button>
             </div>
-            <select
-              value={roleFilter}
-              onChange={(e) => {
-                const v = e.target.value as "" | Role;
-                setRoleFilter(v);
-                setOffset(0);
-                load(0, v, query);
-              }}
-              className="rounded-md border border-border bg-muted/70 px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-accent/30 sm:w-44"
-            >
-              <option value="">Все роли</option>
-              {availableRoles.map((r) => (
-                <option key={r} value={r}>
-                  {roleLabel(r) || r}
-                </option>
-              ))}
-            </select>
-            <Button type="submit" className="gap-1.5 sm:w-auto">
-              <IconSearch size={13} />
-              Найти
-            </Button>
-          </form>
-
-          {/* Role filter pills */}
-          <div className="mb-4 flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => { setRoleFilter(""); setOffset(0); load(0, "", query); }}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                roleFilter === "" ? "bg-accent text-white" : "bg-muted text-subtle hover:text-text"
-              }`}
-            >
-              Все
-            </button>
-            {availableRoles.map((r) => (
+            <div className="flex flex-wrap gap-1.5">
               <button
-                key={r}
                 type="button"
-                onClick={() => { setRoleFilter(r); setOffset(0); load(0, r, query); }}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                  roleFilter === r
-                    ? roleBadge[r].replace("border ", "")
-                    : "bg-muted text-subtle hover:text-text"
+                onClick={() => { setRoleFilter(""); setOffset(0); load(0, "", query); }}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  roleFilter === "" ? "bg-accent text-white shadow-sm" : "bg-muted text-subtle hover:text-text"
                 }`}
               >
-                {roleLabel(r) || r}
+                Все роли
               </button>
-            ))}
-          </div>
+              {availableRoles.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => { setRoleFilter(r); setOffset(0); load(0, r, query); }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    roleFilter === r
+                      ? roleBadge[r].replace("border ", "")
+                      : "bg-muted text-subtle hover:text-text"
+                  }`}
+                >
+                  {roleLabel(r) || r}
+                </button>
+              ))}
+            </div>
+          </form>
 
           {loading ? (
             <div className="space-y-2">
@@ -368,41 +346,13 @@ export default function UsersPage() {
             </>
           )}
 
-          {/* Pagination */}
-          <div className="mt-5 flex items-center justify-between border-t border-border/60 pt-4">
-            <Button
-              variant="secondary"
-              disabled={offset === 0 || loading}
-              onClick={() => {
-                const o = Math.max(0, offset - PAGE_SIZE);
-                setOffset(o);
-                load(o, roleFilter, query);
-              }}
-              className="gap-1.5"
-            >
-              <IconArrowLeft size={14} />
-              Назад
-            </Button>
-            <span className="text-xs text-subtle">
-              {items.length === 0
-                ? "0"
-                : `${offset + 1}–${offset + items.length}`}{" "}
-              из {total}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={!hasNext || loading}
-              onClick={() => {
-                const o = offset + PAGE_SIZE;
-                setOffset(o);
-                load(o, roleFilter, query);
-              }}
-              className="gap-1.5"
-            >
-              Вперёд
-              <IconArrowRight size={14} />
-            </Button>
-          </div>
+          <Pagination
+            offset={offset}
+            pageSize={PAGE_SIZE}
+            total={total}
+            loading={loading}
+            onPage={(o) => { setOffset(o); load(o, roleFilter, query); }}
+          />
         </CardBody>
       </Card>
     </div>

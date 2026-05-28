@@ -1,6 +1,8 @@
 package keyboards
 
 import (
+	"fmt"
+
 	maxbot "github.com/max-messenger/max-bot-api-client-go"
 	"github.com/max-messenger/max-bot-api-client-go/schemes"
 
@@ -24,43 +26,124 @@ func EventList(events []*domain.Event, offset int, hasMore bool, activeFilter st
 		kb.AddRow().AddCallback(e.Title, schemes.DEFAULT, callbacks.EventShow(e.ID))
 	}
 
-	// Навигация — отдельным рядом.
-	var navRow *maxbot.KeyboardRow
-	if offset >= pageSize {
-		if navRow == nil {
-			navRow = kb.AddRow()
+	// Навигация — отдельным рядом с номером страницы посередине.
+	hasPrev := offset >= pageSize
+	if hasPrev || hasMore {
+		navRow := kb.AddRow()
+		if hasPrev {
+			navRow.AddCallback("◀ Назад", schemes.DEFAULT, callbacks.EventListPage(offset-pageSize))
 		}
-		navRow.AddCallback("◀ Назад", schemes.DEFAULT, callbacks.EventListPage(offset-pageSize))
-	}
-	if hasMore {
-		if navRow == nil {
-			navRow = kb.AddRow()
+		page := offset/pageSize + 1
+		navRow.AddCallback(fmt.Sprintf("· %d ·", page), schemes.DEFAULT, callbacks.EventListPage(offset))
+		if hasMore {
+			navRow.AddCallback("Вперёд ▶", schemes.DEFAULT, callbacks.EventListPage(offset+pageSize))
 		}
-		navRow.AddCallback("Вперёд ▶", schemes.DEFAULT, callbacks.EventListPage(offset+pageSize))
 	}
 
-	// Фильтр по формату.
-	filterRow := kb.AddRow()
-	allStyle := schemes.DEFAULT
-	if activeFilter == "" {
-		allStyle = schemes.POSITIVE
+	// Фильтры — одна кнопка, открывает отдельный экран.
+	filterLabel := "Фильтры"
+	filterStyle := schemes.DEFAULT
+	if activeFilter != "" {
+		filterLabel = "Фильтры: " + humanFilterLabel(activeFilter)
+		filterStyle = schemes.POSITIVE
 	}
-	filterRow.AddCallback("Все", allStyle, callbacks.EventFilterSet(""))
+	kb.AddRow().AddCallback(filterLabel, filterStyle, callbacks.EventFiltersOpen())
 
-	for _, f := range []struct{ label, format string }{
+	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
+	return kb
+}
+
+// EventFilterMenu — экран выбора фильтров (формат, время, места, тема).
+func EventFilterMenu(formatFilter, timeFilter string, seatsOnly bool, tagFilter string) *maxbot.Keyboard {
+	kb := newKB()
+
+	// --- Формат ---
+	fmtRow := kb.AddRow()
+	for _, f := range []struct{ label, val string }{
+		{"Формат: Все", ""},
 		{"Очно", "offline"},
 		{"Онлайн", "online"},
 		{"Гибрид", "hybrid"},
 	} {
 		style := schemes.DEFAULT
-		if activeFilter == f.format {
+		if formatFilter == f.val {
 			style = schemes.POSITIVE
 		}
-		filterRow.AddCallback(f.label, style, callbacks.EventFilterSet(f.format))
+		fmtRow.AddCallback(f.label, style, callbacks.EventFilterSet(f.val))
 	}
 
+	// --- Когда ---
+	timeRow := kb.AddRow()
+	for _, f := range []struct{ label, val string }{
+		{"Когда: Любое", ""},
+		{"Сегодня", "today"},
+		{"Эта неделя", "week"},
+	} {
+		style := schemes.DEFAULT
+		if timeFilter == f.val {
+			style = schemes.POSITIVE
+		}
+		timeRow.AddCallback(f.label, style, callbacks.EventFilterTime(f.val))
+	}
+
+	// --- Места ---
+	seatsRow := kb.AddRow()
+	allSeatsStyle := schemes.DEFAULT
+	if !seatsOnly {
+		allSeatsStyle = schemes.POSITIVE
+	}
+	seatsRow.AddCallback("Места: Все", allSeatsStyle, callbacks.EventFilterSeats(""))
+	onlyFreeStyle := schemes.DEFAULT
+	if seatsOnly {
+		onlyFreeStyle = schemes.POSITIVE
+	}
+	seatsRow.AddCallback("Только свободные", onlyFreeStyle, callbacks.EventFilterSeats("1"))
+
+	// --- Тема ---
+	tagRow := kb.AddRow()
+	for _, f := range []struct{ label, val string }{
+		{"Тема: Все", ""},
+		{"IT", "it"},
+		{"Карьера", "карьера"},
+		{"Хакатон", "хакатон"},
+	} {
+		style := schemes.DEFAULT
+		if tagFilter == f.val {
+			style = schemes.POSITIVE
+		}
+		tagRow.AddCallback(f.label, style, callbacks.EventFilterTag(f.val))
+	}
+	// дополнительный ряд тем
+	extraTagRow := kb.AddRow()
+	for _, f := range []struct{ label, val string }{
+		{"Поступление", "поступление"},
+		{"Олимпиада", "олимпиада"},
+		{"DevOps", "devops"},
+	} {
+		style := schemes.DEFAULT
+		if tagFilter == f.val {
+			style = schemes.POSITIVE
+		}
+		extraTagRow.AddCallback(f.label, style, callbacks.EventFilterTag(f.val))
+	}
+
+	kb.AddRow().AddCallback("Сбросить все фильтры", schemes.DEFAULT, callbacks.EventFilterReset())
+	kb.AddRow().AddCallback("Назад к списку", schemes.NEGATIVE, callbacks.EventListPage(0))
 	kb.AddRow().AddCallback("В главное меню", schemes.NEGATIVE, callbacks.MainMenu())
 	return kb
+}
+
+func humanFilterLabel(f string) string {
+	switch f {
+	case "offline":
+		return "Очно"
+	case "online":
+		return "Онлайн"
+	case "hybrid":
+		return "Гибрид"
+	default:
+		return f
+	}
 }
 
 // PageSize возвращает размер страницы списка событий. Экспортируется для

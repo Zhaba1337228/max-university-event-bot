@@ -49,14 +49,14 @@ func TestEventListWithPaging(t *testing.T) {
 	kb := keyboards.EventList(events, 8, true, "")
 	rows := kb.Build().Buttons
 
-	// 2 события + ряд навигации (Back+Дальше) + ряд фильтров + ряд "В главное меню" = 5
+	// 2 события + ряд навигации (Back+page+Дальше) + ряд фильтров + ряд "В главное меню" = 5
 	if len(rows) != 5 {
 		t.Errorf("want 5 rows, got %d", len(rows))
 	}
-	// в навигации должно быть 2 кнопки
+	// offset=8>=pageSize → есть Назад; hasMore=true → есть Вперёд; плюс номер страницы = 3
 	navRow := rows[2]
-	if len(navRow) != 2 {
-		t.Errorf("want 2 nav buttons, got %d", len(navRow))
+	if len(navRow) != 3 {
+		t.Errorf("want 3 nav buttons, got %d", len(navRow))
 	}
 }
 

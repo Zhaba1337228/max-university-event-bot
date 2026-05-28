@@ -109,6 +109,9 @@ func (s *eventService) GetOpen(ctx context.Context, id int64) (*EventWithFree, e
 	if !e.IsOpenForRegistration() {
 		return nil, ErrEventClosed
 	}
+	if !e.StartsAt.IsZero() && e.StartsAt.Before(time.Now()) {
+		return nil, ErrEventClosed
+	}
 	free, err := s.freeSeats(ctx, e)
 	if err != nil {
 		return nil, fmt.Errorf("free seats: %w", err)

@@ -118,6 +118,11 @@ func EventListHeader() string {
 	return "Доступные мероприятия:"
 }
 
+// EventFilterMenuHeader — заголовок экрана фильтра.
+func EventFilterMenuHeader() string {
+	return "Выберите формат мероприятий:"
+}
+
 // EventListItem — одна строка в текстовом списке (если в кнопках не помещается весь заголовок).
 // Содержит название, дату, формат и длительность (если известна).
 func EventListItem(idx int, e *domain.Event) string {

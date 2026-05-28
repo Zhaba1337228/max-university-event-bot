@@ -26,6 +26,7 @@ import {
   IconCheck,
   IconX,
   IconActivity,
+  IconTrash,
 } from "@/components/ui/icons";
 
 const formatLabel: Record<string, string> = {
@@ -43,6 +44,7 @@ export default function EventDetailPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; kind: ToastKind } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function load() {
     setErr(null);
@@ -66,6 +68,23 @@ export default function EventDetailPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function deleteEvent() {
+    setBusy(true);
+    setToast(null);
+    try {
+      await api.delete(`/api/events/${id}`);
+      router.replace("/events");
+    } catch (e) {
+      setToast({
+        msg: e instanceof HttpError && e.body?.message ? e.body.message : "Не удалось удалить",
+        kind: "error",
+      });
+      setConfirmDelete(false);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function toggleStatus(target: "close" | "open") {
     if (!data) return;
@@ -374,6 +393,50 @@ export default function EventDetailPage() {
               )}
             </CardBody>
           </Card>
+
+          {/* Delete event */}
+          {canEdit && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-danger">Удаление</CardTitle>
+              </CardHeader>
+              <CardBody className="space-y-2">
+                {!confirmDelete ? (
+                  <Button
+                    variant="danger"
+                    className="w-full justify-start gap-2"
+                    disabled={busy}
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    <IconTrash size={15} />
+                    Удалить мероприятие
+                  </Button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-danger">Удалить навсегда? Это действие необратимо.</p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="danger"
+                        className="flex-1 text-xs"
+                        disabled={busy}
+                        onClick={deleteEvent}
+                      >
+                        Да, удалить
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="flex-1 text-xs"
+                        disabled={busy}
+                        onClick={() => setConfirmDelete(false)}
+                      >
+                        Отмена
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          )}
 
           {/* Event ID */}
           <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-subtle">

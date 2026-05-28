@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/max-messenger/max-bot-api-client-go/schemes"
 
@@ -66,13 +67,42 @@ func (h *EventsHandler) OnCallback(ctx context.Context, upd *schemes.MessageCall
 	case "details":
 		eventID := p.ArgInt64(0)
 		h.showDetails(ctx, chatID, userID, eventID)
-	case "filter":
-		filterFormat := p.ArgString(0)
+	case "filters_open":
 		snap, _ := h.fsm.Load(ctx, userID)
-		snap.Context.EventFilter = filterFormat
+		h.showFilterMenu(ctx, chatID, snap.Context)
+	case "filter":
+		snap, _ := h.fsm.Load(ctx, userID)
+		snap.Context.EventFilter = p.ArgString(0)
 		snap.Context.Offset = 0
 		_ = h.fsm.Save(ctx, userID, fsm.StateEventList, snap.Context)
-		h.showList(ctx, chatID, userID, 0)
+		h.showFilterMenu(ctx, chatID, snap.Context)
+	case "filter_time":
+		snap, _ := h.fsm.Load(ctx, userID)
+		snap.Context.EventTimeFilter = p.ArgString(0)
+		snap.Context.Offset = 0
+		_ = h.fsm.Save(ctx, userID, fsm.StateEventList, snap.Context)
+		h.showFilterMenu(ctx, chatID, snap.Context)
+	case "filter_seats":
+		snap, _ := h.fsm.Load(ctx, userID)
+		snap.Context.EventSeatsOnly = p.ArgString(0) == "1"
+		snap.Context.Offset = 0
+		_ = h.fsm.Save(ctx, userID, fsm.StateEventList, snap.Context)
+		h.showFilterMenu(ctx, chatID, snap.Context)
+	case "filter_tag":
+		snap, _ := h.fsm.Load(ctx, userID)
+		snap.Context.EventTagFilter = p.ArgString(0)
+		snap.Context.Offset = 0
+		_ = h.fsm.Save(ctx, userID, fsm.StateEventList, snap.Context)
+		h.showFilterMenu(ctx, chatID, snap.Context)
+	case "filter_reset":
+		snap, _ := h.fsm.Load(ctx, userID)
+		snap.Context.EventFilter = ""
+		snap.Context.EventTimeFilter = ""
+		snap.Context.EventSeatsOnly = false
+		snap.Context.EventTagFilter = ""
+		snap.Context.Offset = 0
+		_ = h.fsm.Save(ctx, userID, fsm.StateEventList, snap.Context)
+		h.showFilterMenu(ctx, chatID, snap.Context)
 	default:
 		h.log.Debug("unknown ev action", "action", p.Action)
 		if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.FallbackUnknown(), keyboards.MainMenu()); err != nil {
@@ -81,18 +111,125 @@ func (h *EventsHandler) OnCallback(ctx context.Context, upd *schemes.MessageCall
 	}
 }
 
+func (h *EventsHandler) showFilterMenu(ctx context.Context, chatID int64, fc fsm.UserFSMContext) {
+	kb := keyboards.EventFilterMenu(fc.EventFilter, fc.EventTimeFilter, fc.EventSeatsOnly, fc.EventTagFilter)
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, messages.EventFilterMenuHeader(), kb); err != nil {
+		h.log.Error("send filter menu failed", "err", err)
+	}
+}
+
+func buildFilterSummary(fc fsm.UserFSMContext) string {
+	count := 0
+	var single string
+	if fc.EventFilter != "" {
+		count++
+		single = humanFilterFormat(fc.EventFilter)
+	}
+	if fc.EventTimeFilter != "" {
+		count++
+		if fc.EventTimeFilter == "today" {
+			single = "Сегодня"
+		} else {
+			single = "Эта неделя"
+		}
+	}
+	if fc.EventSeatsOnly {
+		count++
+		single = "С местами"
+	}
+	if fc.EventTagFilter != "" {
+		count++
+		single = "#" + fc.EventTagFilter
+	}
+	if count == 0 {
+		return ""
+	}
+	if count == 1 {
+		return single
+	}
+	return fmt.Sprintf("%d активных", count)
+}
+
+func humanFilterFormat(f string) string {
+	switch f {
+	case "offline":
+		return "Очно"
+	case "online":
+		return "Онлайн"
+	case "hybrid":
+		return "Гибрид"
+	default:
+		return f
+	}
+}
+
+func applyFilters(items []service.EventWithFree, fc fsm.UserFSMContext) []service.EventWithFree {
+	if fc.EventFilter != "" {
+		var out []service.EventWithFree
+		for _, it := range items {
+			if string(it.Event.Format) == fc.EventFilter {
+				out = append(out, it)
+			}
+		}
+		items = out
+	}
+	if fc.EventTimeFilter == "today" {
+		now := time.Now()
+		var out []service.EventWithFree
+		for _, it := range items {
+			t := it.Event.StartsAt
+			if t.Year() == now.Year() && t.YearDay() == now.YearDay() {
+				out = append(out, it)
+			}
+		}
+		items = out
+	} else if fc.EventTimeFilter == "week" {
+		weekEnd := time.Now().Add(7 * 24 * time.Hour)
+		var out []service.EventWithFree
+		for _, it := range items {
+			if it.Event.StartsAt.Before(weekEnd) {
+				out = append(out, it)
+			}
+		}
+		items = out
+	}
+	if fc.EventSeatsOnly {
+		var out []service.EventWithFree
+		for _, it := range items {
+			if it.FreeSeats > 0 {
+				out = append(out, it)
+			}
+		}
+		items = out
+	}
+	if fc.EventTagFilter != "" {
+		tag := fc.EventTagFilter
+		var out []service.EventWithFree
+		for _, it := range items {
+			for _, t := range it.Event.Tags {
+				if strings.ToLower(t) == tag {
+					out = append(out, it)
+					break
+				}
+			}
+		}
+		items = out
+	}
+	return items
+}
+
 func (h *EventsHandler) showList(ctx context.Context, chatID, userID int64, offset int) {
 	pageSize := keyboards.PageSize()
 
-	// Загружаем FSM для получения активного фильтра.
 	snap, _ := h.fsm.Load(ctx, userID)
-	filter := snap.Context.EventFilter
+	fc := snap.Context
+
+	needsFilter := fc.EventFilter != "" || fc.EventTimeFilter != "" || fc.EventSeatsOnly || fc.EventTagFilter != ""
 
 	var pageItems []service.EventWithFree
 	var hasMore bool
 
-	if filter != "" {
-		// Фильтруем по формату: грузим большой батч, режем в памяти.
+	if needsFilter {
 		all, _, err := h.events.ListOpen(ctx, 200, 0)
 		if err != nil {
 			h.log.Error("list events failed", "err", err)
@@ -101,12 +238,7 @@ func (h *EventsHandler) showList(ctx context.Context, chatID, userID int64, offs
 			}
 			return
 		}
-		var filtered []service.EventWithFree
-		for _, it := range all {
-			if string(it.Event.Format) == filter {
-				filtered = append(filtered, it)
-			}
-		}
+		filtered := applyFilters(all, fc)
 		start := offset
 		if start > len(filtered) {
 			start = len(filtered)
@@ -137,27 +269,23 @@ func (h *EventsHandler) showList(ctx context.Context, chatID, userID int64, offs
 		return
 	}
 
-	// Сохраняем offset в FSM, чтобы из карточки кнопка «Назад к списку»
-	// возвращала пользователя на ту же страницу.
 	snap.Context.Offset = offset
 	_ = h.fsm.Save(ctx, userID, fsm.StateEventList, snap.Context)
 
-	// Текстовый список + клавиатура.
-	var b strings.Builder
-	b.WriteString(messages.EventListHeader())
-	b.WriteString("\n\n")
-	events := make([]*domain.Event, 0, len(pageItems))
-	for i, it := range pageItems {
-		b.WriteString(messages.EventListItem(i+offset, it.Event))
-		if it.FreeSeats == 0 {
-			b.WriteString(" (мест нет)")
-		}
-		b.WriteString("\n")
-		events = append(events, it.Event)
+	page := offset/keyboards.PageSize() + 1
+	header := messages.EventListHeader()
+	if summary := buildFilterSummary(fc); summary != "" {
+		header += " · " + summary
+	}
+	header += fmt.Sprintf(" · стр. %d", page)
+
+	evList := make([]*domain.Event, 0, len(pageItems))
+	for _, it := range pageItems {
+		evList = append(evList, it.Event)
 	}
 
-	kb := keyboards.EventList(events, offset, hasMore, filter)
-	if err := h.api.SendTextWithKeyboard(ctx, chatID, b.String(), kb); err != nil {
+	kb := keyboards.EventList(evList, offset, hasMore, buildFilterSummary(fc))
+	if err := h.api.SendTextWithKeyboard(ctx, chatID, header, kb); err != nil {
 		h.log.Error("send list failed", "err", err)
 	}
 }

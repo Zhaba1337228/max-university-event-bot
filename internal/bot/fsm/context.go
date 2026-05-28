@@ -25,8 +25,11 @@ type UserFSMContext struct {
 	// Pagination.
 	Offset int `json:"offset,omitempty"`
 
-	// Event list filter (format: "offline", "online", "hybrid", "" = all).
-	EventFilter string `json:"event_filter,omitempty"`
+	// Event list filters.
+	EventFilter     string `json:"event_filter,omitempty"`      // format: offline/online/hybrid
+	EventTimeFilter string `json:"event_time_filter,omitempty"` // today/week
+	EventSeatsOnly  bool   `json:"event_seats_only,omitempty"`  // только с местами
+	EventTagFilter  string `json:"event_tag_filter,omitempty"`  // it/карьера/хакатон/поступление
 
 	// AI recommendations pagination.
 	AIRecommIDs []int64 `json:"ai_recomm_ids,omitempty"`

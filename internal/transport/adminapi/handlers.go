@@ -550,6 +550,27 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleEventDelete — DELETE /api/events/:id.
+// Доступ: только владелец или admin.
+func (s *Server) handleEventDelete(w http.ResponseWriter, r *http.Request) {
+	c, _ := claimsFromContext(r.Context())
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, errResp("bad_id", "Некорректный id"))
+		return
+	}
+	if !ownsEvent(r, s, c.UserID, c.Role, id) {
+		writeJSON(w, http.StatusForbidden, errResp("forbidden", "Нет доступа"))
+		return
+	}
+	if err := s.deps.EventsRepo.Delete(r.Context(), s.deps.DB, id); err != nil {
+		s.log.Error("delete event failed", "err", err, "event_id", id)
+		writeJSON(w, http.StatusInternalServerError, errResp("db", "Ошибка удаления"))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- helpers ---
 
 // ownsEvent — проверка ownership через прямой Get + сравнение CreatedBy.

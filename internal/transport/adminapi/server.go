@@ -148,6 +148,7 @@ func (s *Server) routes() http.Handler {
 		r.Post("/events/{id}/close", s.handleEventClose)
 		r.Post("/events/{id}/open", s.handleEventOpen)
 		r.Post("/events/{id}/cancel", s.handleEventCancel)
+		r.Delete("/events/{id}", s.handleEventDelete)
 		r.Post("/events/{id}/broadcast", s.handleBroadcast)
 		r.Post("/events/{id}/registrations/{regID}/mark", s.handleManualMark)
 

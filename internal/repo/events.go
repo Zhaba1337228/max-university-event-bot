@@ -86,9 +86,9 @@ func (r *eventsRepo) ListOpen(ctx context.Context, q Querier, limit, offset int)
 
 	const stmt = `
 SELECT ` + eventColumns + `,
-       (SELECT COUNT(*) FROM events WHERE status = 'open') AS total
+       (SELECT COUNT(*) FROM events WHERE status = 'open' AND starts_at > NOW()) AS total
 FROM events
-WHERE status = 'open'
+WHERE status = 'open' AND starts_at > NOW()
 ORDER BY starts_at ASC
 LIMIT $1 OFFSET $2`
 
@@ -215,6 +215,15 @@ func (r *eventsRepo) UpdateShortSummary(ctx context.Context, q Querier, id int64
 	_, err := q.Exec(ctx, stmt, id, summary)
 	if err != nil {
 		return fmt.Errorf("update short summary: %w", err)
+	}
+	return nil
+}
+
+func (r *eventsRepo) Delete(ctx context.Context, q Querier, id int64) error {
+	const stmt = `DELETE FROM events WHERE id = $1`
+	_, err := q.Exec(ctx, stmt, id)
+	if err != nil {
+		return fmt.Errorf("delete event: %w", err)
 	}
 	return nil
 }
