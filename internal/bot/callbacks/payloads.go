@@ -15,14 +15,14 @@ import (
 
 // Group — логическая группа payload'а. Маршрутизация Dispatcher идёт по Group.
 const (
-	GroupMain     = "main"
-	GroupEvent    = "ev"
-	GroupReg      = "reg"
-	GroupMy       = "my"
-	GroupCancel   = "cancel"
-	GroupAI       = "ai"
-	GroupWaitlist = "wl"
-	GroupOrg      = "org"
+	GroupMain      = "main"
+	GroupEvent     = "ev"
+	GroupReg       = "reg"
+	GroupMy        = "my"
+	GroupCancel    = "cancel"
+	GroupAI        = "ai"
+	GroupWaitlist  = "wl"
+	GroupOrg       = "org"
 	GroupOrgList   = "orglist"
 	GroupOrgNotif  = "orgnotif"
 	GroupOrgClose  = "orgclose"

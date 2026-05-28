@@ -357,7 +357,7 @@ func (s *Server) handleEventCancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"event": eventToDTO(ev),
+		"event":          eventToDTO(ev),
 		"notified_count": sent,
 	})
 }
